@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APT 2.0 - Bhadrak Postal Division Inventory</title>
+  <!-- SheetJS CDN for parsing Excel bulk uploads -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <!-- Firebase Compat SDKs (Ensures global functions work correctly without a bundler) -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
+
+  <style>
+    :root {
+      --primary: #dc2626;     /* Official India Post Crimson */
+      --primary-hover: #b91c1c;
+      --secondary: #475569;   /* Slate Professional Accent */
+      --accent: #f59e0b;
+      --danger: #ef4444;
+      --success: #10b981;
+      --bg: #090d16;          /* Deep Executive Navy Background */
+      --card-bg: #111827;     /* Sleek Dark Card Background */
+      --text: #f8fafc;        /* Crisp Light Text */
+      --text-muted: #94a3b8;  /* Refined Muted Text */
+      --border: #334155;      /* Professional Border */
+      --apt-crimson: #c41230;
+      --apt-gold: #ffcc00;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    body { background: radial-gradient(circle at top, #1e1b4b 0%, #090d16 60%); color: var(--text); min-height: 100vh; padding-bottom: 50px; }
+
+    /* =========================================================
+       APT 2.0 INDIA POST LOGIN SCREEN STYLES
+       ========================================================= */
+    #apt-login-screen {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: #f4f5f7;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow-y: auto;
+    }
+
+    .apt-top-bar {
+      background: linear-gradient(90deg, #990000 0%, #c41230 100%);
+      color: white;
+      padding: 12px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 4px solid var(--apt-gold);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+
+    .apt-brand-title {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .apt-brand-title img {
+      height: 48px;
+      width: auto;
+      background: white;
+      padding: 4px;
+      border-radius: 6px;
+    }
+
+    .apt-brand-text h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      text-transform: uppercase;
+    }
+
+    .apt-brand-text p {
+      font-size: 0.78rem;
+      color: var(--apt-gold);
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
+
+    .apt-login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      padding: 40px 20px;
+    }
+
+    .apt-login-card {
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      border: 1px solid #e2e8f0;
+      width: 100%;
+      max-width: 440px;
+      overflow: hidden;
+    }
+
+    .apt-card-header {
+      background: #fcfcfc;
+      padding: 24px 28px 18px 28px;
+      border-bottom: 2px solid #f1f5f9;
+      text-align: center;
+    }
+
+    .apt-card-header h3 {
+      color: #990000;
+      font-size: 1.35rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .apt-card-header p {
+      color: #64748b;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .apt-login-body {
+      padding: 28px;
+    }
+
+    .apt-input-group {
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .apt-input-group label {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .apt-input-group input {
+      padding: 12px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+      color: #0f172a;
+      background: #f8fafc;
+      transition: all 0.2s ease;
+    }
+
+    .apt-input-group input:focus {
+      border-color: #990000;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(153, 0, 0, 0.12);
+    }
+
+    .apt-btn-submit {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #c41230 0%, #990000 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(153, 0, 0, 0.25);
+      transition: all 0.2s ease;
+      margin-top: 10px;
+    }
+
+    .apt-btn-submit:hover {
+      background: linear-gradient(135deg, #d91b3b 0%, #b30000 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(153, 0, 0, 0.35);
+    }
+
+    .apt-error-msg {
+      color: #dc2626;
+      font-size: 0.83rem;
+      font-weight: 700;
+      background: #fef2f2;
+      border: 1px solid #feccae;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      display: none;
+      text-align: center;
+    }
+
+    .apt-footer {
+      background: #0f172a;
+      color: #94a3b8;
+      text-align: center;
+      padding: 16px;
+      font-size: 0.8rem;
+      border-top: 3px solid var(--apt-gold);
+    }
+
+    /* =========================================================
+       MAIN DASHBOARD STYLES
+       ========================================================= */
+    #main-app-content { display: none; }
+
+    header {
+      background: linear-gradient(135deg, #3b0764 0%, #831843 50%, #991b1b 100%);
+      color: white;
+      padding: 28px 40px;
+      box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.6);
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+    }
+    header::after {
+      content: "";
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 220px; height: 220px;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    header > div:not(.header-right) {
+      grid-column: 2;
+      text-align: center;
+    }
+    header h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
+    header p { font-size: 0.92rem; color: #fecaca; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+    
+    .header-right {
+      grid-column: 3;
+      justify-self: end;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .reset-btn {
+      background: linear-gradient(135deg, #e11d48, #9f1239);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.85rem;
+      box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+      transition: all 0.2s ease;
+    }
+    .reset-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(225, 29, 72, 0.5); background: linear-gradient(135deg, #f43f5e, #be123c); }
+
+    .logout-btn {
+      background: #334155;
+      color: white;
+      border: 1px solid #64748b;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+    .logout-btn:hover { background: #475569; }
+
+    .live-clock {
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Navigation Tabs */
+    nav {
+      background: transparent;
+      padding: 28px 30px 14px 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .tab-btn {
+      padding: 14px 24px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tab-btn:hover { 
+      color: var(--text); 
+      background: #1e293b; 
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.4);
+      border-color: #64748b;
+    }
+    .tab-btn.active { 
+      color: white; 
+      background: linear-gradient(135deg, #ef4444, #b91c1c); 
+      border-color: #f87171;
+      box-shadow: 0 8px 22px rgba(239, 68, 68, 0.4);
+      transform: translateY(-2px);
+    }
+
+    main { max-width: 1400px; margin: 10px auto; padding: 0 20px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 10px 35px -5px rgba(0,0,0,0.5), 0 4px 6px -2px rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      margin-bottom: 28px;
+    }
+    
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #f87171;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 14px;
+      letter-spacing: 0.3px;
+    }
+
+    .records-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+      gap: 28px;
+      align-items: start;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-group label { font-size: 0.88rem; font-weight: 700; color: #e2e8f0; letter-spacing: 0.3px; }
+    .form-group input, .form-group select {
+      padding: 13px 16px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      outline: none;
+      background: #1e293b;
+      color: var(--text);
+      transition: all 0.2s ease;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: #ef4444; background: #0f172a; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2); }
+
+    .btn {
+      padding: 12px 24px;
+      border-radius: 10px;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .btn-primary { background: linear-gradient(135deg, #ef4444, #b91c1c); color: white; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.35); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5); background: linear-gradient(135deg, #f87171, #dc2626); }
+    .btn-secondary { background: #334155; color: #f8fafc; border: 2px solid #475569; }
+    .btn-secondary:hover { background: #475569; color: #ffffff; }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+
+    .table-container { overflow-x: auto; border-radius: 12px; border: 2px solid var(--border); background: #090d16; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
+    th { background: #1e293b; padding: 15px 20px; color: #f1f5f9; font-weight: 800; border-bottom: 2px solid var(--border); text-transform: uppercase; font-size: 0.82rem; letter-spacing: 0.5px; }
+    td { padding: 15px 20px; border-bottom: 1px solid var(--border); background: #111827; color: var(--text); }
+    tr:hover td { background-color: #1a2234; }
+
+    .badge { padding: 6px 14px; border-radius: 30px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+
+    .masters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 28px;
+    }
+
+    #print-section { display: none; }
+
+    @media print {
+      body * { visibility: hidden; }
+      #print-section, #print-section * { visibility: visible; }
+      #print-section {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+      }
+
+      @page {
+        size: A4 portrait;
+        margin: 4mm;
+      }
+
+      html, body {
+        height: 289mm;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden;
+      }
+
+      .triplicate-page {
+        height: 285mm;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-space-between;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+        box-sizing: border-box;
+      }
+
+      .invoice-copy {
+        position: relative;
+        height: 31.8%; 
+        box-sizing: border-box;
+        border: 1px solid #334155 !important; 
+        border-radius: 4px !important;
+        padding: 8px 12px;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-size: 10px;
+        line-height: 1.3;
+        background: #fff;
+        color: #0f172a;
+        display: flex;
+        flex-direction: column;
+        justify-space-between;
+        page-break-inside: avoid !important;
+      }
+
+      .invoice-copy * { color: #0f172a; }
+
+      .inv-table-wrapper {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-top: 4px;
+        flex-grow: 1;
+      }
+
+      .inv-table-wrapper th {
+        background-color: #f1f5f9 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        text-transform: uppercase;
+        font-size: 8.5px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 4px 6px;
+        border: 1px solid #cbd5e1 !important;
+        color: #334155 !important;
+      }
+
+      .inv-table-wrapper td {
+        border: 1px solid #cbd5e1 !important;
+        padding: 4px 6px;
+        vertical-align: middle;
+        font-size: 9.5px;
+      }
+
+      .signature-box {
+        text-align: center;
+        width: 140px;
+        font-size: 9px;
+        font-weight: 700;
+        margin-left: auto;
+      }
+      
+      .signature-line {
+        border-bottom: 1px solid #000;
+        height: 20px;
+        margin-bottom: 2px;
+      }
+
+      .copy-label { 
+        position: absolute; 
+        top: 0; 
+        right: 0; 
+        font-size: 7.5px; 
+        font-weight: 800; 
+        border-left: 1px solid #334155 !important; 
+        border-bottom: 1px solid #334155 !important;
+        border-radius: 0 4px 0 4px !important;
+        padding: 3px 8px; 
+        background: #f8fafc !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color: #334155;
+        text-transform: uppercase;
+        z-index: 10;
+      }
+      
+      .invoice-header {
+        text-align: center;
+        border-bottom: 1.5px solid #334155 !important;
+        padding-bottom: 4px;
+        margin-bottom: 6px;
+      }
+      
+      .invoice-header h2 { margin: 0; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; }
+      .invoice-header p { margin: 2px 0 0; font-size: 8.5px; font-weight: 600; color: #475569; }
+      
+      .invoice-details {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        font-size: 9.5px;
+      }
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(5px);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .modal-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+    .modal-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 32px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 420px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      transform: translateY(-20px);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .modal-overlay.active .modal-box {
+      transform: translateY(0);
+    }
+    .modal-box h3 {
+      margin-bottom: 20px;
+      color: var(--text);
+      font-weight: 800;
+      font-size: 1.2rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .password-input-group {
+      position: relative;
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .password-input-group input {
+      width: 100%;
+      padding: 14px 45px 14px 16px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: #1e293b;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .password-input-group input:focus {
+      border-color: #ef4444;
+      background: #0f172a;
+    }
+    .password-input-group button {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.2rem;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .password-input-group button:hover {
+      color: #f8fafc;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================
+       APT 2.0 LOGIN SCREEN OVERLAY (INDIA POST OFFICIAL LOOK)
+       ========================================================= -->
+  <div id="apt-login-screen">
+    <div class="apt-top-bar">
+      <div class="apt-brand-title">
+        <img src="India Post Dak Sewa Jan Sewa New Logo Final.PNG" alt="India Post Logo" onerror="this.style.display='none'">
+        <div class="apt-brand-text">
+          <h2>Department of Posts • India Post</h2>
+          <p>APT 2.0 (Advanced Postal Technology Portal)</p>
+        </div>
+      </div>
+      <div style="font-size: 0.85rem; font-weight: 700; color: #ffffff;">
+        Government of India
+      </div>
+    </div>
+
+    <div class="apt-login-container">
+      <div class="apt-login-card">
+        <div class="apt-card-header">
+          <h3>APT 2.0 Unified Sign In</h3>
+          <p>Bhadrak Postal Division Technology Branch</p>
+        </div>
+        <div class="apt-login-body">
+          <div id="apt-error" class="apt-error-msg">Invalid Credentials! Please try again.</div>
+          <form onsubmit="handleAPTLogin(event)">
+            <div class="apt-input-group">
+              <label>Employee ID</label>
+              <input type="text" id="apt-userid" placeholder="Enter Employee ID" required>
+            </div>
+            <div class="apt-input-group">
+              <label>Password</label>
+              <input type="password" id="apt-password" placeholder="Enter Password" required>
+            </div>
+            <button type="submit" class="apt-btn-submit">🔒 Secure Login (APT 2.0)</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="apt-footer">
+      © Department of Posts, Ministry of Communications, Government of India. All Rights Reserved.
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MAIN INVENTORY APPLICATION CONTENT
+       ========================================================= -->
+  <div id="main-app-content">
+    <!-- App Header -->
+    <header>
+      <div>
+        <h1>
+          <img src="India Post Dak Sewa Jan Sewa New Logo Final.PNG" alt="India Post Logo" style="height: 2.5em; width: auto; vertical-align: middle; margin-right: 14px; object-fit: contain;" onerror="this.style.display='none'"> 
+          Bhadrak Postal Division Inventory (Technology Branch)
+        </h1>
+        <p>O/o Superintendent of Post Offices • Bhadrak Division</p>
+      </div>
+      <div class="header-right">
+        <div style="display: flex; gap: 8px;">
+          <button class="logout-btn" style="background: #0284c7; border-color: #0369a1;" onclick="openChangePasswordModal(false)">🔑 Reset Password</button>
+          <button class="reset-btn" onclick="triggerResetData()">🔒 Reset Stock</button>
+          <button class="logout-btn" onclick="handleAPTLogout()">🚪 Logout</button>
+        </div>
+        <div id="live-clock" class="live-clock"></div>
+      </div>
+    </header>
+
+   <!-- App Navigation -->
+    <nav>
+      <button class="tab-btn active" onclick="switchTab('issue-tab')">📦 Issue Stock & Invoice</button>
+      <button class="tab-btn" onclick="switchTab('receive-tab')">📥 Receive Stock</button>
+      <button class="tab-btn" onclick="switchTab('history-tab')">📊 Transaction Records</button>
+      <button class="tab-btn" onclick="switchTab('logs-tab')">📋 Invoice & Receipt Logs</button>
+      <button class="tab-btn" onclick="switchTab('masters-tab')">⚙️ Manage Masters</button>
+    </nav>
+
+    <main>
+      <!-- TAB 1: ISSUE STOCK & INVOICE -->
+      <section id="issue-tab" class="tab-content active">
+        <div class="card">
+          <div class="card-title">📦 Issue Stock & Generate Triplicate Invoice</div>
+          <form id="issue-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Select Office / Recipient</label>
+                <select id="issue-office" required></select>
+              </div>
+              <div class="form-group">
+                <label>Supplied To</label>
+                <select id="issue-supplied-to" required></select>
+              </div>
+              <div class="form-group">
+                <label>Invoice / Order Number</label>
+                <select id="issue-invoice-no" required></select>
+              </div>
+              <div class="form-group">
+                <label>Date of Issue</label>
+                <input type="date" id="issue-date" required>
+              </div>
+              <div class="form-group" style="grid-column: 1 / -1;">
+                <label>Additional Manual Noting / Remarks (Optional)</label>
+                <input type="text" id="issue-additional-noting" placeholder="e.g. Urgent requirement for operational dispatch...">
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 25px 0 14px;">
+              <h3 style="font-size: 1.15rem; color: #f8fafc; font-weight:700;">Selected Item List</h3>
+              <div style="display: flex; gap: 10px;">
+                <button type="button" class="btn btn-secondary" onclick="addIssueRow()">+ Add Item Row</button>
+                <button type="button" class="btn btn-danger" onclick="clearIssueForm()">Clear Entries</button>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 6%;">#</th>
+                    <th style="width: 39%;">Description of Article</th>
+                    <th style="width: 15%;">Available Stock</th>
+                    <th style="width: 15%;">Issue Qty</th>
+                    <th style="width: 15%;">Balance Stock</th>
+                    <th style="width: 10%;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="issue-items-body"></tbody>
+              </table>
+            </div>
+
+            <div style="margin-top: 30px; text-align: right;">
+              <button type="submit" class="btn btn-primary" style="padding: 15px 36px; font-size: 1.05rem;">
+                🖨️ Generate & Print Invoice (Triplicate)
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- TAB 2: RECEIVE STOCK -->
+      <section id="receive-tab" class="tab-content">
+        <div class="card">
+          <div class="card-title">📥 Record Stock Receipt (Inward Entry)</div>
+          <form id="receive-form" onsubmit="handleReceiveSubmit(event)">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Name of the Firm Received From</label>
+                <input type="text" id="rec-firm" placeholder="e.g. M/s Tech Solutions" required>
+              </div>
+              <div class="form-group">
+                <label>Date of Receipt</label>
+                <input type="date" id="rec-date" required>
+              </div>
+              <div class="form-group">
+                <label>Select Item Received</label>
+                <select id="rec-item" required></select>
+              </div>
+              <div class="form-group">
+                <label>Quantity Received</label>
+                <input type="number" id="rec-qty" min="1" placeholder="0" required>
+              </div>
+              <div class="form-group">
+                <label>Mode of Receipt</label>
+                <select id="rec-mode" required>
+                  <option value="Through GeM">Through GeM</option>
+                  <option value="Direct Purchase">Direct Purchase</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>GeM Order Number</label>
+                <input type="text" id="rec-gem-no" placeholder="GEM-2026-XXXX">
+              </div>
+              <div class="form-group">
+                <label>Supplier Invoice Number</label>
+                <input type="text" id="rec-inv-no" placeholder="INV/2026/001" required>
+              </div>
+              <div class="form-group">
+                <label>Total Amount (₹)</label>
+                <input type="number" step="0.01" id="rec-amount" placeholder="0.00" required>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">+ Record Receipt & Add to Inventory</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📊 Current Inventory Levels</div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item Code / No.</th>
+                  <th>Item Description</th>
+                  <th>Current Available Stock</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-summary-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: TRANSACTION RECORDS -->
+      <section id="history-tab" class="tab-content">
+        <div class="records-grid" style="grid-template-columns: 1fr;">
+          <div class="card" id="stock-register-card">
+            <div class="card-title">📦 Detailed Stock Register</div>
+            
+            <div class="form-group" style="margin-bottom: 20px;">
+              <input type="text" id="stock-search" onkeyup="renderStockRegister()" placeholder="🔍 Search Item by Name..." style="width: 100%;">
+            </div>
+            
+            <div id="stock-register-list" style="display: flex; flex-direction: column; gap: 15px;">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: INVOICE & RECEIPT LOGS -->
+      <section id="logs-tab" class="tab-content">
+        <div class="card">
+          <div class="card-title">📋 Issued Invoice Logs & Stock Receipt Logs</div>
+          
+          <h3 style="font-size: 1.1rem; color: #f8fafc; font-weight:700; margin-bottom: 12px;">Issued Invoice Logs</h3>
+          <div class="table-container" style="margin-bottom: 24px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice No</th>
+                  <th>Office / Recipient</th>
+                  <th>Items Issued</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="issue-logs-body"></tbody>
+            </table>
+          </div>
+
+          <h3 style="font-size: 1.1rem; color: #f8fafc; font-weight:700; margin-bottom: 12px;">Stock Receipt Logs</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Firm Name</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Mode</th>
+                  <th>GeM / Inv No</th>
+                  <th>Amount</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="receive-logs-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: MANAGE MASTERS -->
+      <section id="masters-tab" class="tab-content">
+        <div class="masters-grid">
+
+          <div class="card" style="border: 2px solid var(--primary); background: linear-gradient(135deg, #18080c, #111827);">
+            <div class="card-title" style="color: #f87171;">🚀 Stock Opening Balance</div>
+            
+            <p style="font-size: 0.88rem; color: #cbd5e1; margin-bottom: 12px; line-height: 1.5;">
+              <strong>Option A: Bulk Upload via Excel</strong><br>
+              Upload an Excel spreadsheet to initialize or override stock balances.<br>
+              <span style="font-size:0.8rem; color:#94a3b8;">Col A: Exact Product Description | Col B: Stock Quantity</span>
+            </p>
+            <div style="background: #1e293b; padding: 14px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 20px;">
+              <label style="font-size: 0.85rem; font-weight:800; color:#f87171; display:block; margin-bottom:8px;">Choose Excel Spreadsheet (.xlsx/.xls):</label>
+              <input type="file" accept=".xlsx, .xls" onchange="bulkUploadOpeningBalance(event)" style="display:block; width:100%; color: #f8fafc;">
+            </div>
+
+            <p style="font-size: 0.88rem; color: #cbd5e1; margin-bottom: 12px; line-height: 1.5;">
+              <strong>Option B: Manual Opening Balance Entry</strong><br>
+              Set or update opening balance for an individual item manually.
+            </p>
+            <div style="background: #1e293b; padding: 14px; border-radius: 10px; border: 1px solid var(--border);">
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div class="form-group">
+                  <label style="font-size:0.82rem; color:#f8fafc;">Select Item</label>
+                  <select id="manual-ob-item" style="width: 100%; background: #0f172a; color: #f8fafc; border: 1px solid var(--border); padding: 10px; border-radius: 8px;"></select>
+                </div>
+                <div class="form-group">
+                  <label style="font-size:0.82rem; color:#f8fafc;">Opening Balance Quantity</label>
+                  <input type="number" id="manual-ob-qty" placeholder="Enter Qty" min="0" style="width: 100%; background: #0f172a; color: #f8fafc; border: 1px solid var(--border); padding: 10px; border-radius: 8px;">
+                </div>
+                <button class="btn btn-primary" onclick="setManualOpeningBalance()" style="margin-top: 4px; padding: 10px;">Set Opening Balance</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🏢 Office Names Master</div>
+            <div style="margin-bottom: 14px;">
+              <label style="font-size: 0.85rem; font-weight:700;">Bulk Upload (Excel):</label>
+              <input type="file" accept=".xlsx, .xls" onchange="bulkUploadMaster(event, 'offices')" style="margin-top:6px; color: #f8fafc;">
+            </div>
+            <div style="display:flex; gap:10px; margin-bottom: 14px;">
+              <input type="text" id="add-office-input" placeholder="Add new office name" style="flex:1;">
+              <button class="btn btn-primary" onclick="addMasterItem('offices', 'add-office-input')">Add</button>
+            </div>
+            <div class="table-container" style="max-height: 240px; overflow-y: auto;">
+              <table>
+                <thead><tr><th>Office Name</th><th style="width: 20%;">Action</th></tr></thead>
+                <tbody id="master-offices-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🏷️ Products / Items Master</div>
+            <div style="margin-bottom: 14px;">
+              <label style="font-size: 0.85rem; font-weight:700;">Bulk Upload (Excel):</label>
+              <input type="file" accept=".xlsx, .xls" onchange="bulkUploadMaster(event, 'items')" style="margin-top:6px; color: #f8fafc;">
+            </div>
+            <div style="display:flex; gap:10px; margin-bottom: 14px;">
+              <input type="text" id="add-item-input" placeholder="Add product description" style="flex:1;">
+              <button class="btn btn-primary" onclick="addMasterItem('items', 'add-item-input')">Add</button>
+            </div>
+            <div class="table-container" style="max-height: 240px; overflow-y: auto;">
+              <table>
+                <thead><tr><th>Product Description</th><th style="width: 20%;">Action</th></tr></thead>
+                <tbody id="master-items-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📑 Invoice Numbers Master</div>
+            <div style="margin-bottom: 14px;">
+              <label style="font-size: 0.85rem; font-weight:700;">Bulk Upload (Excel):</label>
+              <input type="file" accept=".xlsx, .xls" onchange="bulkUploadMaster(event, 'invoiceNumbers')" style="margin-top:6px; color: #f8fafc;">
+            </div>
+            <div style="display:flex; gap:10px; margin-bottom: 14px;">
+              <input type="text" id="add-invno-input" placeholder="Add invoice number pattern" style="flex:1;">
+              <button class="btn btn-primary" onclick="addMasterItem('invoiceNumbers', 'add-invno-input')">Add</button>
+            </div>
+            <div class="table-container" style="max-height: 240px; overflow-y: auto;">
+              <table>
+                <thead><tr><th>Invoice Number</th><th style="width: 20%;">Action</th></tr></thead>
+                <tbody id="master-invno-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">👥 Supplied To Master</div>
+            <div style="margin-bottom: 14px;">
+              <label style="font-size: 0.85rem; font-weight:700;">Bulk Upload (Excel):</label>
+              <input type="file" accept=".xlsx, .xls" onchange="bulkUploadMaster(event, 'suppliedTo')" style="margin-top:6px; color: #f8fafc;">
+            </div>
+            <div style="display:flex; gap:10px; margin-bottom: 14px;">
+              <input type="text" id="add-supplied-input" placeholder="Add recipient designation" style="flex:1;">
+              <button class="btn btn-primary" onclick="addMasterItem('suppliedTo', 'add-supplied-input')">Add</button>
+            </div>
+            <div class="table-container" style="max-height: 240px; overflow-y: auto;">
+              <table>
+                <thead><tr><th>Supplied To Entity</th><th style="width: 20%;">Action</th></tr></thead>
+                <tbody id="master-supplied-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+    <!-- PRINT SECTION: TRIPLICATE INVOICE TEMPLATE -->
+    <div id="print-section">
+      <div class="triplicate-page" id="triplicate-container">
+      </div>
+    </div>
+
+    <!-- Custom Password Modal -->
+    <div id="password-modal" class="modal-overlay">
+      <div class="modal-box">
+        <h3 id="modal-title">Enter Password</h3>
+        <div class="password-input-group">
+          <input type="password" id="modal-password-input" placeholder="Enter password...">
+          <button type="button" id="toggle-password-btn" onclick="togglePasswordVisibility()" title="Show/Hide Password">👁️</button>
+        </div>
+        <p id="modal-error" style="color: #ef4444; font-size: 0.85rem; display: none; font-weight: 600;">Incorrect password! Please try again.</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitPassword()">Proceed</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reset Login Password Modal -->
+    <div id="change-pwd-modal" class="modal-overlay">
+      <div class="modal-box">
+        <h3 id="change-pwd-title">Reset Login Password</h3>
+        <div class="form-group" style="margin-bottom: 12px;" id="old-pwd-group">
+          <label style="font-size:0.85rem; color:#e2e8f0;">Current Password</label>
+          <input type="password" id="old-login-pwd" placeholder="Enter current password">
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size:0.85rem; color:#e2e8f0;">New Password</label>
+          <input type="password" id="new-login-pwd" placeholder="Enter new password">
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size:0.85rem; color:#e2e8f0;">Confirm New Password</label>
+          <input type="password" id="confirm-login-pwd" placeholder="Confirm new password">
+        </div>
+        <p id="change-pwd-error" style="color: #ef4444; font-size: 0.85rem; display: none; font-weight: 600; margin-top: 8px;"></p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="cancel-change-pwd-btn" onclick="closeChangePasswordModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitPasswordChange()">Update Password</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- APT 2.0 LOGIN & AUTH CONFIGURATION ---
+    const VALID_EMPLOYEE_ID = "10179252";
+    const DEFAULT_SITE_PASSWORD = "Muneer*1993";
+
+    function getStoredPassword() {
+      return localStorage.getItem('apt2_site_password') || DEFAULT_SITE_PASSWORD;
+    }
+
+    function getLastPasswordChangeDate() {
+      let ts = localStorage.getItem('apt2_last_pwd_change');
+      if (!ts) {
+        ts = Date.now().toString();
+        localStorage.setItem('apt2_last_pwd_change', ts);
+      }
+      return parseInt(ts, 10);
+    }
+
+    function isPasswordExpired() {
+      const lastChange = getLastPasswordChangeDate();
+      const daysPassed = (Date.now() - lastChange) / (1000 * 60 * 60 * 24);
+      return daysPassed >= 180;
+    }
+
+    let isMandatoryReset = false;
+
+    function handleAPTLogin(e) {
+      e.preventDefault();
+      const empId = document.getElementById('apt-userid').value.trim();
+      const pwd = document.getElementById('apt-password').value;
+      const errorEl = document.getElementById('apt-error');
+
+      const currentPwd = getStoredPassword();
+
+      if (empId === VALID_EMPLOYEE_ID && pwd === currentPwd) {
+        errorEl.style.display = 'none';
+
+        if (isPasswordExpired()) {
+          alert('Your password is older than 180 days and must be reset compulsorily before continuing.');
+          openChangePasswordModal(true);
+          return;
+        }
+
+        sessionStorage.setItem('apt2_authenticated', 'true');
+        showMainApp();
+      } else {
+        errorEl.textContent = 'Invalid Employee ID or Password! Please try again.';
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function handleAPTLogout() {
+      sessionStorage.removeItem('apt2_authenticated');
+      location.reload();
+    }
+
+    function showMainApp() {
+      document.getElementById('apt-login-screen').style.display = 'none';
+      document.getElementById('main-app-content').style.display = 'block';
+      initApp();
+    }
+
+    // --- RESET LOGIN PASSWORD FUNCTIONS ---
+    function openChangePasswordModal(mandatory = false) {
+      isMandatoryReset = mandatory;
+      const modal = document.getElementById('change-pwd-modal');
+      const title = document.getElementById('change-pwd-title');
+      const oldGroup = document.getElementById('old-pwd-group');
+      const cancelBtn = document.getElementById('cancel-change-pwd-btn');
+      const err = document.getElementById('change-pwd-error');
+
+      document.getElementById('old-login-pwd').value = '';
+      document.getElementById('new-login-pwd').value = '';
+      document.getElementById('confirm-login-pwd').value = '';
+      err.style.display = 'none';
+
+      if (mandatory) {
+        title.textContent = "🔒 Compulsory Password Reset (180 Days Expiry)";
+        oldGroup.style.display = "none";
+        cancelBtn.style.display = "none";
+      } else {
+        title.textContent = "🔑 Reset Login Password";
+        oldGroup.style.display = "flex";
+        cancelBtn.style.display = "inline-flex";
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeChangePasswordModal() {
+      if (isMandatoryReset) return;
+      document.getElementById('change-pwd-modal').classList.remove('active');
+    }
+
+    function submitPasswordChange() {
+      const oldPwd = document.getElementById('old-login-pwd').value;
+      const newPwd = document.getElementById('new-login-pwd').value;
+      const confirmPwd = document.getElementById('confirm-login-pwd').value;
+      const err = document.getElementById('change-pwd-error');
+
+      const currentPwd = getStoredPassword();
+
+      if (!isMandatoryReset && oldPwd !== currentPwd) {
+        err.textContent = "Current password is incorrect!";
+        err.style.display = 'block';
+        return;
+      }
+
+      if (!newPwd || newPwd.length < 4) {
+        err.textContent = "Please enter a valid new password.";
+        err.style.display = 'block';
+        return;
+      }
+
+      if (newPwd !== confirmPwd) {
+        err.textContent = "New password and confirmation do not match.";
+        err.style.display = 'block';
+        return;
+      }
+
+      localStorage.setItem('apt2_site_password', newPwd);
+      localStorage.setItem('apt2_last_pwd_change', Date.now().toString());
+
+      err.style.display = 'none';
+      alert("Password reset successfully!");
+
+      document.getElementById('change-pwd-modal').classList.remove('active');
+
+      if (isMandatoryReset) {
+        sessionStorage.setItem('apt2_authenticated', 'true');
+        showMainApp();
+        isMandatoryReset = false;
+      }
+    }
+
+    // --- FIREBASE INITIALIZATION & DATA SYNC ---
+    const DEFAULT_DATA = {
+      offices: [],
+      suppliedTo: [],
+      invoiceNumbers: [],
+      items: [],
+      issueLogs: [],
+      receiveLogs: []
+    };
+
+    let appData = DEFAULT_DATA;
+
+    // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyApSDoAiOuHv4k2RgYvHgYPz7qlRLhxW7I",
+  authDomain: "bhadrakdotechnology.firebaseapp.com",
+  projectId: "bhadrakdotechnology",
+  storageBucket: "bhadrakdotechnology.firebasestorage.app",
+  messagingSenderId: "505194623684",
+  appId: "1:505194623684:web:93ac8f13f6f0ec513c8f91",
+  measurementId: "G-VPW2X5GDM7"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+    // Initialize Firebase Compat SDK
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Listen to Firebase Realtime Database for changes
+    db.ref('postal_inv_app_data').on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        // Firebase removes empty arrays, so we must safely cast them back
+        appData = {
+          offices: data.offices || [],
+          suppliedTo: data.suppliedTo || [],
+          invoiceNumbers: data.invoiceNumbers || [],
+          items: data.items || [],
+          issueLogs: data.issueLogs || [],
+          receiveLogs: data.receiveLogs || []
+        };
+      } else {
+        appData = DEFAULT_DATA;
+      }
+      
+      // Update UI whenever data changes in the cloud
+      if (sessionStorage.getItem('apt2_authenticated') === 'true') {
+        renderAll();
+      }
+    });
+
+    // Pushes updates to the cloud database instead of localStorage
+    function saveData() {
+      db.ref('postal_inv_app_data').set(appData)
+        .catch(error => {
+            console.error("Firebase save error: ", error);
+            alert("Error syncing to cloud. Check internet connection.");
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      if (sessionStorage.getItem('apt2_authenticated') === 'true') {
+        showMainApp();
+      }
+    });
+
+    function initApp() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('issue-date').value = today;
+      document.getElementById('rec-date').value = today;
+      
+      addIssueRow();
+      renderAll();
+
+      updateLiveClock();
+      setInterval(updateLiveClock, 1000);
+    }
+
+    function updateLiveClock() {
+      const now = new Date();
+      const options = { 
+        weekday: 'short', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        hour12: true 
+      };
+      const formatted = now.toLocaleString('en-IN', options);
+      const clockEl = document.getElementById('live-clock');
+      if (clockEl) {
+        clockEl.textContent = formatted;
+      }
+    }
+
+    let currentModalCallback = null;
+    let expectedPassword = "";
+
+    function openPasswordModal(title, correctPwd, onSuccess) {
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-password-input').value = '';
+      document.getElementById('modal-password-input').type = 'password';
+      document.getElementById('toggle-password-btn').textContent = '👁️';
+      document.getElementById('modal-error').style.display = 'none';
+      
+      document.getElementById('password-modal').classList.add('active');
+      document.getElementById('modal-password-input').focus();
+      
+      expectedPassword = correctPwd;
+      currentModalCallback = onSuccess;
+    }
+
+    function closePasswordModal() {
+      document.getElementById('password-modal').classList.remove('active');
+      currentModalCallback = null;
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById('modal-password-input');
+      const btn = document.getElementById('toggle-password-btn');
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+      }
+    }
+
+    function submitPassword() {
+      const inputVal = document.getElementById('modal-password-input').value;
+      if (inputVal === expectedPassword) {
+        const callbackToRun = currentModalCallback; 
+        closePasswordModal();
+        if (callbackToRun) {
+            callbackToRun();
+        }
+      } else {
+        document.getElementById('modal-error').style.display = 'block';
+      }
+    }
+
+    document.getElementById('modal-password-input').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        submitPassword();
+      }
+    });
+
+    function switchTab(tabId) {
+      if (tabId === 'masters-tab') {
+        openPasswordModal("🔒 Admin Access: Manage Masters", getStoredPassword(), function() {
+          executeTabSwitch(tabId);
+        });
+        return;
+      }
+      executeTabSwitch(tabId);
+    }
+
+    function executeTabSwitch(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      
+      const targetBtn = document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
+      if (targetBtn) targetBtn.classList.add('active');
+    }
+
+    function triggerResetData() {
+      openPasswordModal("⚠️ Reset Inventory Stock to Zero", getStoredPassword(), function() {
+        appData.items.forEach(item => item.stock = 0);
+        saveData();
+        alert("Success: All inventory stock levels have been reset to 0.");
+      });
+    }
+
+    function renderStockRegister() {
+      const searchTerm = document.getElementById('stock-search').value.toLowerCase();
+      const container = document.getElementById('stock-register-list');
+      
+      const filteredItems = appData.items.filter(item => item.name.toLowerCase().includes(searchTerm));
+      
+      container.innerHTML = filteredItems.map((item, idx) => {
+        const itemHistory = appData.issueLogs.filter(log => log.items.some(i => i.name === item.name));
+        
+        const historyRows = itemHistory.map(log => {
+          const issuedItem = log.items.find(i => i.name === item.name);
+          return `<tr>
+                    <td>${log.date}</td>
+                    <td>${log.suppliedTo} (${log.office})</td>
+                    <td><strong>${issuedItem.qty}</strong></td>
+                  </tr>`;
+        }).join('');
+
+        return `
+          <div style="border: 1px solid var(--border); background: #111827; border-radius: 10px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+              <h4 style="font-size: 1.1rem; color: #f8fafc; margin: 0;">${item.name} 
+                <span style="color: #34d399; margin-left: 10px;">(Balance: ${item.stock})</span>
+              </h4>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="toggleHistory('hist-${idx}')">⬇️ History</button>
+                <button class="btn btn-warning" style="padding: 6px 12px; font-size: 0.8rem; background: #b45309; color: white; border: none;" onclick="clearItemHistory('${item.name}')">🧹 Clear History</button>
+                <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;" onclick="removeStockItem('${item.name}')">❌ Remove</button>
+              </div>
+            </div>
+            
+            <div id="hist-${idx}" style="display: none; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+              <table style="width: 100%; font-size: 0.85rem;">
+                <thead>
+                  <tr><th>Date</th><th>Supplied To (Office)</th><th>Qty Supplied</th></tr>
+                </thead>
+                <tbody>
+                  ${historyRows || '<tr><td colspan="3" style="text-align:center;">No supply history found.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleHistory(id) {
+      const el = document.getElementById(id);
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function clearItemHistory(itemName) {
+      if(confirm(`Clear all supply history for "${itemName}"? This will not change current stock balances.`)) {
+        appData.issueLogs.forEach(log => {
+          log.items = log.items.filter(i => i.name !== itemName);
+        });
+        appData.issueLogs = appData.issueLogs.filter(log => log.items.length > 0);
+        saveData();
+      }
+    }
+
+    function removeStockItem(itemName) {
+      if(confirm(`Permanently remove "${itemName}" from the entire registry?`)) {
+        appData.items = appData.items.filter(i => i.name !== itemName);
+        saveData();
+      }
+    }
+
+    function renderMasters() {
+      const officeBody = document.getElementById('master-offices-body');
+      officeBody.innerHTML = appData.offices.map((off, idx) => `
+        <tr>
+          <td>${off}</td>
+          <td><button class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteMasterItem('offices', ${idx})">Delete</button></td>
+        </tr>
+      `).join('');
+
+      const suppliedBody = document.getElementById('master-supplied-body');
+      suppliedBody.innerHTML = appData.suppliedTo.map((sup, idx) => `
+        <tr>
+          <td>${sup}</td>
+          <td><button class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteMasterItem('suppliedTo', ${idx})">Delete</button></td>
+        </tr>
+      `).join('');
+
+      const invBody = document.getElementById('master-invno-body');
+      invBody.innerHTML = appData.invoiceNumbers.map((inv, idx) => `
+        <tr>
+          <td>${inv}</td>
+          <td><button class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteMasterItem('invoiceNumbers', ${idx})">Delete</button></td>
+        </tr>
+      `).join('');
+
+      const itemsBody = document.getElementById('master-items-body');
+      itemsBody.innerHTML = appData.items.map((item, idx) => `
+        <tr>
+          <td>${item.name}</td>
+          <td><button class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteMasterItem('items', ${idx})">Delete</button></td>
+        </tr>
+      `).join('');
+
+      populateDropdown('issue-office', appData.offices);
+      populateDropdown('issue-supplied-to', appData.suppliedTo);
+      populateDropdown('issue-invoice-no', appData.invoiceNumbers);
+      populateDropdown('rec-item', appData.items.map(i => i.name));
+      populateDropdown('manual-ob-item', appData.items.map(i => i.name));
+      
+      document.querySelectorAll('.issue-item-select').forEach(sel => {
+        const val = sel.value;
+        sel.innerHTML = '<option value="">-- Select Article --</option>' + appData.items.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+        sel.value = val;
+      });
+
+      renderInventorySummary();
+      updateAllRowStocks();
+    }
+
+    function populateDropdown(id, array) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const currentVal = el.value;
+      el.innerHTML = array.length ? array.map(item => `<option value="${item}">${item}</option>`).join('') : '<option value="">No Options Available</option>';
+      if (array.includes(currentVal)) el.value = currentVal;
+    }
+
+    function addMasterItem(key, inputId) {
+      const input = document.getElementById(inputId);
+      const val = input.value.trim();
+      if (!val) return;
+
+      if (key === 'items') {
+        if (!appData.items.some(i => i.name === val)) {
+          appData.items.push({ name: val, stock: 0 });
+        }
+      } else {
+        if (!appData[key].includes(val)) {
+          appData[key].push(val);
+        }
+      }
+      input.value = '';
+      saveData();
+    }
+
+    function deleteMasterItem(key, index) {
+      appData[key].splice(index, 1);
+      saveData();
+    }
+
+    function bulkUploadMaster(event, key) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        jsonData.forEach(row => {
+          if (row[0]) {
+            const val = String(row[0]).trim();
+            if (val && val.toLowerCase() !== 'name' && val.toLowerCase() !== 'item') {
+              if (key === 'items') {
+                if (!appData.items.some(i => i.name === val)) {
+                  appData.items.push({ name: val, stock: 0 });
+                }
+              } else {
+                if (!appData[key].includes(val)) {
+                  appData[key].push(val);
+                }
+              }
+            }
+          }
+        });
+        saveData();
+        alert('Bulk upload imported successfully!');
+        event.target.value = "";
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function bulkUploadOpeningBalance(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        let updatedCount = 0;
+        jsonData.forEach(row => {
+          if (row[0] && row[1] !== undefined) {
+            const itemName = String(row[0]).trim();
+            const stockVal = parseInt(row[1]) || 0;
+            
+            if (itemName.toLowerCase() !== 'name' && itemName.toLowerCase() !== 'item' && itemName.toLowerCase() !== 'product description') {
+              const existingItem = appData.items.find(i => i.name === itemName);
+              if (existingItem) {
+                existingItem.stock = stockVal;
+                updatedCount++;
+              } else {
+                appData.items.push({ name: itemName, stock: stockVal });
+                updatedCount++;
+              }
+            }
+          }
+        });
+        saveData();
+        alert(`Opening stock balances successfully updated for ${updatedCount} items!`);
+        event.target.value = "";
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function setManualOpeningBalance() {
+      const itemSelect = document.getElementById('manual-ob-item');
+      const qtyInput = document.getElementById('manual-ob-qty');
+      const itemName = itemSelect ? itemSelect.value : '';
+      const qty = parseInt(qtyInput ? qtyInput.value : '');
+
+      if (!itemName) {
+        alert('Please select a product/item.');
+        return;
+      }
+      if (isNaN(qty) || qty < 0) {
+        alert('Please enter a valid non-negative stock quantity.');
+        return;
+      }
+
+      const itemObj = appData.items.find(i => i.name === itemName);
+      if (itemObj) {
+        itemObj.stock = qty;
+        saveData();
+        qtyInput.value = '';
+        alert(`Opening stock balance for "${itemName}" updated to ${qty}.`);
+      }
+    }
+
+    function addIssueRow() {
+      const tbody = document.getElementById('issue-items-body');
+      const rowIdx = tbody.children.length;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${rowIdx + 1}</td>
+        <td>
+          <select class="form-group issue-item-select" style="width:100%; background:#1e293b; color:#f8fafc; border:2px solid var(--border); padding:11px; border-radius:8px;" onchange="updateAllRowStocks()" required>
+            <option value="">-- Select Article --</option>
+            ${appData.items.map(i => `<option value="${i.name}">${i.name}</option>`).join('')}
+          </select>
+        </td>
+        <td class="avail-stock-cell" style="font-weight:bold; color:#f87171">0</td>
+        <td>
+          <input type="number" class="issue-qty-input" min="1" value="1" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; background:#1e293b; color:#f8fafc;" oninput="updateAllRowStocks()" required>
+        </td>
+        <td class="balance-stock-cell" style="font-weight:bold; color:#34d399">0</td>
+        <td>
+          <button type="button" class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;" onclick="removeIssueRow(this)">Remove</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+      updateAllRowStocks();
+    }
+
+    function removeIssueRow(btn) {
+      const tbody = document.getElementById('issue-items-body');
+      if (tbody.children.length > 1) {
+        btn.closest('tr').remove();
+        Array.from(tbody.children).forEach((tr, idx) => {
+          tr.children[0].textContent = idx + 1;
+        });
+        updateAllRowStocks();
+      } else {
+        alert('At least one item line is required.');
+      }
+    }
+
+    function updateAllRowStocks() {
+      const rows = document.querySelectorAll('#issue-items-body tr');
+      const selectedItems = [];
+      rows.forEach(tr => {
+        const val = tr.querySelector('.issue-item-select').value;
+        if (val) selectedItems.push(val);
+      });
+
+      rows.forEach(tr => {
+        const itemSelect = tr.querySelector('.issue-item-select');
+        const currentVal = itemSelect.value;
+        const options = itemSelect.querySelectorAll('option');
+        
+        options.forEach(opt => {
+          if (opt.value === "") return;
+          if (selectedItems.includes(opt.value) && opt.value !== currentVal) {
+            opt.disabled = true;
+          } else {
+            opt.disabled = false;
+          }
+        });
+      });
+
+      const allocatedMap = {};
+      rows.forEach(tr => {
+        const itemSelect = tr.querySelector('.issue-item-select');
+        const qtyInput = tr.querySelector('.issue-qty-input');
+        const availCell = tr.querySelector('.avail-stock-cell');
+        const balCell = tr.querySelector('.balance-stock-cell');
+
+        const itemName = itemSelect.value;
+        const currentQty = parseInt(qtyInput.value) || 0;
+
+        const matchedItem = appData.items.find(i => i.name === itemName);
+        const globalStock = matchedItem ? matchedItem.stock : 0;
+
+        const priorAllocated = allocatedMap[itemName] || 0;
+        const effectiveAvailStock = globalStock - priorAllocated;
+        const balanceStock = effectiveAvailStock - currentQty;
+
+        availCell.textContent = effectiveAvailStock;
+        balCell.textContent = balanceStock;
+
+        if (balanceStock < 0) {
+          balCell.style.color = '#f87171';
+          qtyInput.style.borderColor = '#f87171';
+        } else {
+          balCell.style.color = '#34d399';
+          qtyInput.style.borderColor = 'var(--border)';
+        }
+
+        if (itemName) {
+          allocatedMap[itemName] = priorAllocated + currentQty;
+        }
+      });
+    }
+
+    function checkDuplicateItems() {
+      const rows = document.querySelectorAll('#issue-items-body tr');
+      const selected = new Set();
+      for (let tr of rows) {
+        const val = tr.querySelector('.issue-item-select').value;
+        if (val) {
+          if (selected.has(val)) return true;
+          selected.add(val);
+        }
+      }
+      return false;
+    }
+
+    function clearIssueForm() {
+      document.getElementById('issue-form').reset();
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('issue-date').value = today;
+      document.getElementById('issue-additional-noting').value = '';
+      const tbody = document.getElementById('issue-items-body');
+      tbody.innerHTML = '';
+      addIssueRow();
+    }
+
+    document.getElementById('issue-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      if (checkDuplicateItems()) {
+        alert('ERROR: Same item cannot be entered in separate rows in the same invoice. Please consolidate quantities.');
+        return;
+      }
+
+      const office = document.getElementById('issue-office').value;
+      const suppliedTo = document.getElementById('issue-supplied-to').value;
+      const invoiceNo = document.getElementById('issue-invoice-no').value;
+      const date = document.getElementById('issue-date').value;
+      const additionalNoting = document.getElementById('issue-additional-noting').value.trim();
+
+      const rows = document.querySelectorAll('#issue-items-body tr');
+      const itemsToIssue = [];
+      let hasNegativeStock = false;
+
+      rows.forEach(tr => {
+        const itemSelect = tr.querySelector('.issue-item-select');
+        const qtyInput = tr.querySelector('.issue-qty-input');
+        const name = itemSelect.value;
+        const qty = parseInt(qtyInput.value) || 0;
+        const balCell = tr.querySelector('.balance-stock-cell');
+        const balanceStock = parseInt(balCell.textContent) || 0;
+
+        if (balanceStock < 0) {
+          hasNegativeStock = true;
+        }
+
+        itemsToIssue.push({ name, qty });
+      });
+
+      if (hasNegativeStock) {
+        alert('ERROR: Cannot generate invoice! One or more items exceed available stock and would result in negative inventory.');
+        return;
+      }
+
+      itemsToIssue.forEach(issued => {
+        const itemObj = appData.items.find(i => i.name === issued.name);
+        if (itemObj) {
+          itemObj.stock -= issued.qty;
+        }
+      });
+
+      const issueRecord = {
+        id: Date.now(),
+        date,
+        invoiceNo,
+        office,
+        suppliedTo,
+        additionalNoting,
+        items: itemsToIssue
+      };
+      appData.issueLogs.unshift(issueRecord);
+      saveData();
+
+      generateAndPrintInvoice(issueRecord);
+      clearIssueForm();
+    });
+
+    function handleReceiveSubmit(e) {
+      e.preventDefault();
+
+      const firm = document.getElementById('rec-firm').value.trim();
+      const date = document.getElementById('rec-date').value;
+      const itemName = document.getElementById('rec-item').value;
+      const qty = parseInt(document.getElementById('rec-qty').value) || 0;
+      const mode = document.getElementById('rec-mode').value;
+      const gemNo = document.getElementById('rec-gem-no').value.trim();
+      const invNo = document.getElementById('rec-inv-no').value.trim();
+      const amount = parseFloat(document.getElementById('rec-amount').value) || 0;
+
+      const itemObj = appData.items.find(i => i.name === itemName);
+      if (itemObj) {
+        itemObj.stock += qty;
+      }
+
+      const recLog = {
+        id: Date.now(),
+        firm,
+        date,
+        itemName,
+        qty,
+        mode,
+        gemNo,
+        invNo,
+        amount
+      };
+      appData.receiveLogs.unshift(recLog);
+      saveData();
+
+      document.getElementById('receive-form').reset();
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('rec-date').value = today;
+      alert('Stock receipt successfully recorded!');
+    }
+
+    function renderInventorySummary() {
+      const tbody = document.getElementById('inventory-summary-body');
+      tbody.innerHTML = appData.items.map((item, idx) => `
+        <tr>
+          <td>${String(idx + 1).padStart(2, '0')}</td>
+          <td>${item.name}</td>
+          <td style="font-weight:bold;">${item.stock}</td>
+          <td>
+            <span class="badge ${item.stock > 10 ? 'badge-success' : item.stock > 0 ? 'badge-warning' : 'badge-danger'}">
+              ${item.stock > 0 ? 'In Stock' : 'Out of Stock'}
+            </span>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderLogs() {
+      const issueBody = document.getElementById('issue-logs-body');
+      issueBody.innerHTML = appData.issueLogs.map(log => `
+        <tr>
+          <td>${log.date}</td>
+          <td><strong>${log.invoiceNo}</strong></td>
+          <td>${log.office} (${log.suppliedTo})</td>
+          <td>${log.items.map(i => `${i.name} (x${i.qty})`).join(', ')}</td>
+          <td>
+            <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick='reprintInvoice(${JSON.stringify(log)})'>Re-Print</button>
+            <button class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteIssueLog(${log.id})">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+
+      const recBody = document.getElementById('receive-logs-body');
+      recBody.innerHTML = appData.receiveLogs.map(log => `
+        <tr>
+          <td>${log.date}</td>
+          <td>${log.firm}</td>
+          <td>${log.itemName}</td>
+          <td><strong>${log.qty}</strong></td>
+          <td>${log.mode}</td>
+          <td>${log.gemNo ? log.gemNo + ' / ' : ''}${log.invNo}</td>
+          <td>₹${log.amount.toFixed(2)}</td>
+          <td>
+            <button class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteReceiveLog(${log.id})">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function deleteIssueLog(id) {
+      if (confirm('Are you sure you want to delete this issue log entry?')) {
+        appData.issueLogs = appData.issueLogs.filter(l => l.id !== id);
+        saveData();
+      }
+    }
+
+    function deleteReceiveLog(id) {
+      if (confirm('Are you sure you want to delete this receipt log entry?')) {
+        appData.receiveLogs = appData.receiveLogs.filter(l => l.id !== id);
+        saveData();
+      }
+    }
+
+    function generateAndPrintInvoice(record) {
+      const printContainer = document.getElementById('triplicate-container');
+      
+      const formatDate = (dateStr) => {
+        const d = new Date(dateStr);
+        return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+      };
+
+      const itemsRowsHtml = record.items.map((it, idx) => `
+        <tr>
+          <td style="text-align:center; padding: 4px 6px;">${String(idx + 1).padStart(2, '0')}.</td>
+          <td style="padding: 4px 6px;"><strong>${it.name}</strong></td>
+          <td style="text-align:center; padding: 4px 6px;"><strong>${String(it.qty).padStart(2, '0')} No.</strong></td>
+        </tr>
+      `).join('');
+
+      printContainer.className = "triplicate-page";
+
+      const renderSingleCopy = (copyTitle) => `
+        <div class="invoice-copy">
+          <div class="copy-label">${copyTitle}</div>
+          
+          <div class="invoice-header" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <img src="India Post Dak Sewa Jan Sewa New Logo Final.PNG" style="height: 38px; width: auto; object-fit: contain; margin-bottom: 2px;" alt="India Post Logo" onerror="this.style.display='none'">
+            <div style="text-align: left;">
+              <h2 style="margin: 0; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #0f172a;">Stock Issue Invoice</h2>
+              <p style="margin: 2px 0 0; font-size: 8.5px; font-weight: 600; color: #475569;">O/O THE SUPERINTENDENT OF POST OFFICES • BHADRAK DIVISION, BHADRAK-756100</p>
+            </div>
+          </div>
+          
+          <div class="invoice-details">
+            <div>
+              <strong>Invoice No:</strong> ${record.invoiceNo}<br>
+              <strong>Issued To:</strong> ${record.suppliedTo}, ${record.office}
+            </div>
+            <div style="text-align: right;">
+              <strong>Date:</strong> ${formatDate(record.date)}
+            </div>
+          </div>
+
+          <table class="inv-table-wrapper">
+            <thead>
+              <tr>
+                <th style="width: 12%; text-align: center;">Sl No.</th>
+                <th style="text-align: left;">Description of Article</th>
+                <th style="width: 18%; text-align: center;">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRowsHtml}
+            </tbody>
+          </table>
+          
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px;">
+            <div style="font-size: 9px; max-width: 65%;">
+              ${record.additionalNoting ? `<strong>Remarks:</strong> ${record.additionalNoting}<br>` : ''}
+              <em style="color: #475569;">* Please acknowledge receipt of the above items to this office.</em>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              For Superintendent Of POs<br>
+              Bhadrak Divn., Bhadrak
+            </div>
+          </div>
+        </div>
+      `;
+
+      printContainer.innerHTML = 
+        renderSingleCopy("ORIGINAL COPY") +
+        renderSingleCopy("DUPLICATE COPY") +
+        renderSingleCopy("TRIPLICATE COPY");
+
+      window.print();
+    }
+
+    function reprintInvoice(record) {
+      generateAndPrintInvoice(record);
+    }
+
+    function renderAll() {
+      renderMasters();
+      renderLogs();
+      renderStockRegister();
+    }
+  </script>
+</body>
+</html>
