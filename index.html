@@ -905,7 +905,17 @@
         activateTab(btn.dataset.tab);
       });
     });
+// 1. Initialize Firebase
+firebase.initializeApp(firebaseConfig);
 
+// 2. Assign Database and Auth instances to your variables
+db = firebase.database();
+auth = firebase.auth();
+
+// 3. Start the connection and data sync when the page loads
+window.addEventListener('DOMContentLoaded', () => {
+  beginDataSync();
+});
   </script>
 </body>
 </html>
