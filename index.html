@@ -414,23 +414,28 @@
       This page intentionally uses index.html's Firebase project and v2 data root.
       Deploy this identical file to systems A, B, C, D, etc. to share live data.
     */
-    const firebaseConfig = {
-      apiKey: "AIzaSyApSDoAiOuHv4k2RgYvHgYPz7qlRLhxW7I",
-      authDomain: "bhadrakdotechnology.firebaseapp.com",
-      databaseURL: "https://bhadrakdotechnology-default-rtdb.firebaseio.com",
-      projectId: "bhadrakdotechnology",
-      storageBucket: "bhadrakdotechnology.firebasestorage.app",
-      messagingSenderId: "505194623684",
-      appId: "1:505194623684:web:93ac8f13f6f0ec513c8f91"
-    };
-    const LEGACY_ROOT = "postal_inv_app_data";
-    const APP_ROOT = LEGACY_ROOT + "/v2";
-    const REQUIRED_EMPLOYEE_ID = "10179252";
-    const REQUIRED_PASSWORD = "Muneer*1993";
-    const serverTime = firebase.database.ServerValue.TIMESTAMP;
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
+   // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyApSDoAiOuHv4k2RgYvHgYPz7qlRLhxW7I",
+  authDomain: "bhadrakdotechnology.firebaseapp.com",
+  databaseURL: "https://bhadrakdotechnology-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "bhadrakdotechnology",
+  storageBucket: "bhadrakdotechnology.firebasestorage.app",
+  messagingSenderId: "505194623684",
+  appId: "1:505194623684:web:93ac8f13f6f0ec513c8f91",
+  measurementId: "G-VPW2X5GDM7"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 
     /* Use Firebase Realtime Database long-polling transport explicitly.
        This improves reliability on office/proxy networks where WebSockets
