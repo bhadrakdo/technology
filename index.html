@@ -1,4 +1,5 @@
 
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -506,8 +507,49 @@
       return error && error.message || "unknown database error.";
     }
     function requireLiveConnection() {
-      if (!user || !dataRef) { alert("Please sign in again."); return false; }
+      if (!user || !dataRef) { alert("The shared inventory session is not ready. Please wait for the Live status before uploading."); return false; }
       if (!isConnected) { alert("The shared database is offline. Reconnect before saving so no record is duplicated or lost."); return false; }
+      return true;
+    }
+
+    async function ensureLiveConnection() {
+      const currentUser = auth.currentUser || user;
+      if (!currentUser) {
+        throw new Error("Your sign-in session is no longer available. Please sign in again.");
+      }
+      user = currentUser;
+
+      /* Re-create the shared data reference whenever a click happens before
+         the normal sync listener has finished, or after a transient Firebase
+         auth/network state change. This prevents a valid signed-in user from
+         being mistaken for a logged-out user. */
+      if (!dataRef) dataRef = db.ref(APP_ROOT);
+
+      if (!connectionRef || !connectionListener) startConnectionListener();
+
+      if (!isConnected) {
+        await new Promise(function(resolve,reject) {
+          let settled = false;
+          let tempRef = db.ref(".info/connected");
+          const tempListener = function(snapshot) {
+            if (snapshot.val() === true && !settled) {
+              settled = true;
+              tempRef.off("value",tempListener);
+              isConnected = true;
+              setStatus("Live — all systems are receiving changes","ok");
+              resolve();
+            }
+          };
+          tempRef.on("value",tempListener);
+          setTimeout(function() {
+            if (settled) return;
+            settled = true;
+            tempRef.off("value",tempListener);
+            reject(new Error("The shared database is offline or still connecting. Please try the upload again when the status shows Live."));
+          },10000);
+        });
+      }
+
       return true;
     }
 
@@ -577,9 +619,10 @@
     async function beginDataSync() {
       setStatus("Preparing shared inventory…");
       try {
+        if (auth.currentUser) user = auth.currentUser;
+        dataRef = db.ref(APP_ROOT);
         await migrateLegacyDataOnce();
         if (!user) return;
-        dataRef = db.ref(APP_ROOT);
         dataListener = function(snapshot) { state = cleanState(snapshot.val()); renderAll(); };
         dataRef.on("value",dataListener,function(error) { setStatus("Cloud access failed: " + friendlyError(error),"bad"); });
         startConnectionListener();
@@ -925,7 +968,13 @@
       return ["name","item","items","product","product description","article","office","designation","invoice","invoice number","order number"].indexOf(word) >= 0;
     }
     async function bulkUploadMasters() {
-      if (!mastersUnlocked || !requireLiveConnection()) return;
+      if (!mastersUnlocked) return;
+      try {
+        await ensureLiveConnection();
+      } catch (error) {
+        alert(error.message || "The shared inventory connection is not ready. Please try again when the status shows Live.");
+        return;
+      }
       const fileInput = document.getElementById("bulk-master-file");
       const group = document.getElementById("bulk-master-type").value;
       try {
@@ -954,7 +1003,13 @@
       } catch (error) { alert(error.message || "Could not import masters."); }
     }
     async function bulkUpdateMasterCard(group,fileInputId) {
-      if (!mastersUnlocked || !requireLiveConnection()) return;
+      if (!mastersUnlocked) return;
+      try {
+        await ensureLiveConnection();
+      } catch (error) {
+        alert(error.message || "The shared inventory connection is not ready. Please try again when the status shows Live.");
+        return;
+      }
       const fileInput = document.getElementById(fileInputId);
       const groupLabel = { offices:"offices", suppliedTo:"supplied-to designations", invoices:"invoice / order numbers", items:"products / articles" }[group] || "master entries";
       try {
@@ -1041,7 +1096,13 @@
     }
 
     async function bulkUploadOpeningBalances() {
-      if (!mastersUnlocked || !requireLiveConnection()) return;
+      if (!mastersUnlocked) return;
+      try {
+        await ensureLiveConnection();
+      } catch (error) {
+        alert(error.message || "The shared inventory connection is not ready. Please try again when the status shows Live.");
+        return;
+      }
       const fileInput = document.getElementById("bulk-opening-file");
       try {
         const rows = await readWorkbook(fileInput.files[0]);
