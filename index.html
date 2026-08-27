@@ -1,5 +1,3 @@
-
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <title>APT 2.0 — Bhadrak Postal Division Inventory</title>
 
-  <!-- The same Firebase project and database path must be used on every system. -->
+  <!-- Firebase & XLSX Libraries -->
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
@@ -30,26 +28,8 @@
     button,input,select { font:inherit; }
     button { cursor:pointer; }
 
-    /* Login page retained from index.html. */
-    .login-shell { min-height:100vh; display:grid; place-items:center; padding:24px; }
-    .login-card { width:min(100%,430px); background:#fff; color:#172033; border-radius:14px; overflow:hidden; box-shadow:0 24px 60px #0008; }
-    .login-head { background:linear-gradient(135deg,#8f0a21,#c41230); color:#fff; padding:26px 28px; border-bottom:4px solid #ffcc00; }
-    .login-head h1 { font-size:1.2rem; margin:0 0 5px; }
-    .login-head p { margin:0; color:#ffe4a3; font-size:.88rem; }
-    .login-body { padding:28px; }
-    .login-body .field { margin:0 0 14px; }
-    .login-body label { display:block; color:#172033; font-weight:700; margin:0 0 6px; }
-    .login-body input { width:100%; padding:11px 12px; color:#172033; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; outline:0; }
-    .login-body input:focus { border-color:#c41230; box-shadow:0 0 0 3px #c4123033; }
-    .login-body .button { width:100%; padding:10px 14px; color:#fff; border:0; border-radius:8px; font-weight:800; background:linear-gradient(135deg,#e11d48,#a9162d); }
-    .login-body .button:hover { filter:brightness(1.12); }
-    .login-body .button:disabled { opacity:.55; cursor:not-allowed; }
-    .note { color:#526174; font-size:.84rem; margin:14px 0 0; }
-    .error { display:none; margin:0 0 14px; padding:10px 12px; color:#991b1b; background:#fff1f2; border:1px solid #fda4af; border-radius:8px; font-weight:600; }
-    .error.visible { display:block; }
-
-    /* Stock Manager interface. All selectors are scoped to the post-login app. */
-    #app { display:none; padding-bottom:50px; }
+    /* Stock Manager interface */
+    #app { display:block; padding-bottom:50px; }
     #app header {
       background:linear-gradient(135deg,#3b0764 0%,#831843 50%,#991b1b 100%);
       color:#fff; padding:28px 40px; box-shadow:0 12px 30px -8px #0009;
@@ -68,13 +48,11 @@
     #app .sync-dot.ok { background:#34d399; box-shadow:0 0 0 3px #34d39933; }
     #app .sync-dot.bad { background:#fb7185; box-shadow:0 0 0 3px #fb718533; }
     #app .header-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-    #app .reset-btn, #app .logout-btn {
+    #app .reset-btn {
       color:#fff; border-radius:7px; cursor:pointer; font-weight:700; font-size:.8rem; padding:7px 13px;
+      background:linear-gradient(135deg,#e11d48,#9f1239); border:0; box-shadow:0 4px 12px #e11d484d;
     }
-    #app .reset-btn { background:linear-gradient(135deg,#e11d48,#9f1239); border:0; box-shadow:0 4px 12px #e11d484d; }
-    #app .logout-btn { background:#334155; border:1px solid #64748b; }
     #app .reset-btn:hover { filter:brightness(1.12); transform:translateY(-1px); }
-    #app .logout-btn:hover { background:#475569; }
 
     #app nav { padding:28px 30px 14px; display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:16px; max-width:1400px; margin:0 auto; }
     #app .tab-btn {
@@ -92,7 +70,6 @@
     #app .card-title { font-size:1.3rem; font-weight:800; color:#f87171; margin:0 0 24px; display:flex; align-items:center; gap:12px; border-bottom:2px solid var(--border); padding-bottom:14px; letter-spacing:.3px; }
     #app .subtle { color:var(--text-muted); margin:0 0 20px; }
     #app .notice { margin:0 0 20px; padding:13px 15px; color:#dbeafe; background:#0c4a6e55; border:1px solid #38bdf855; border-radius:10px; }
-    #app .warning-notice { color:#fde68a; background:#78350f55; border-color:#f59e0b66; }
     #app .records-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(480px,1fr)); gap:28px; align-items:start; }
     #app .masters-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:28px; }
     #app .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; margin-bottom:22px; }
@@ -132,7 +109,6 @@
     #app .master-list { list-style:none; margin:0; padding:0; max-height:300px; overflow:auto; border-top:1px solid var(--border); }
     #app .master-list li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:11px 2px; border-bottom:1px solid var(--border); }
     #app .master-list li span { overflow-wrap:anywhere; }
-    #app .master-list small { color:var(--text-muted); }
     #app .line-actions { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin:16px 0 10px; }
     #app .stock-good { color:#34d399; font-weight:800; }
     #app .stock-low { color:#fbbf24; font-weight:800; }
@@ -181,21 +157,6 @@
   </style>
 </head>
 <body>
-  <div id="login-screen" class="login-shell">
-    <div class="login-card">
-      <div class="login-head">
-        <h1>Department of Posts · Inventory</h1>
-        <p>Bhadrak Postal Division — secure cloud sign-in</p>
-      </div>
-      <form id="login-form" class="login-body">
-        <p id="login-error" class="error" role="alert"></p>
-        <div class="field"><label for="login-employee-id">Employee ID</label><input id="login-employee-id" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter Employee ID" required></div>
-        <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" placeholder="Enter Password" required></div>
-        <button id="login-button" class="button" type="submit">Sign in to shared inventory</button>
-        <p class="note">Every computer must use this same deployed page and Firebase project. Data is never kept as the inventory source in this browser.</p>
-      </form>
-    </div>
-  </div>
 
   <div id="app">
     <header>
@@ -208,7 +169,6 @@
         <div id="live-clock" class="live-clock"></div>
         <div class="header-actions">
           <button id="reset-stock" class="reset-btn" type="button">Reset Stock to Zero</button>
-          <button id="logout" class="logout-btn" type="button">Sign out</button>
         </div>
       </div>
     </header>
@@ -255,7 +215,7 @@
       <section id="receive-tab" class="tab-content">
         <div class="card">
           <h2 class="card-title">📥 Receive Stock</h2>
-          <p class="notice">Receipts update the shared balance and create a permanent record visible to every signed-in system.</p>
+          <p class="notice">Receipts update the shared balance and create a permanent record visible to every system.</p>
           <form id="receive-form">
             <div class="form-grid">
               <div class="form-group"><label for="rec-firm">Supplier / Firm</label><input id="rec-firm" maxlength="200" required></div>
@@ -410,44 +370,24 @@
   </div>
 
   <script>
-    /*
-      This page intentionally uses index.html's Firebase project and v2 data root.
-      Deploy this identical file to systems A, B, C, D, etc. to share live data.
-    */
-   // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+    const firebaseConfig = {
+      apiKey: "AIzaSyApSDoAiOuHv4k2RgYvHgYPz7qlRLhxW7I",
+      authDomain: "bhadrakdotechnology.firebaseapp.com",
+      databaseURL: "https://bhadrakdotechnology-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "bhadrakdotechnology",
+      storageBucket: "bhadrakdotechnology.firebasestorage.app",
+      messagingSenderId: "505194623684",
+      appId: "1:505194623684:web:93ac8f13f6f0ec513c8f91",
+      measurementId: "G-VPW2X5GDM7"
+    };
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyApSDoAiOuHv4k2RgYvHgYPz7qlRLhxW7I",
-  authDomain: "bhadrakdotechnology.firebaseapp.com",
-  databaseURL: "https://bhadrakdotechnology-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "bhadrakdotechnology",
-  storageBucket: "bhadrakdotechnology.firebasestorage.app",
-  messagingSenderId: "505194623684",
-  appId: "1:505194623684:web:93ac8f13f6f0ec513c8f91",
-  measurementId: "G-VPW2X5GDM7"
-};
+    const APP_ROOT = "apt_v2/bhadrak";
+    const LEGACY_ROOT = "apt_legacy";
+    const REQUIRED_PASSWORD = "admin";
+    const REQUIRED_EMPLOYEE_ID = "Operator";
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
-    /* Use Firebase Realtime Database long-polling transport explicitly.
-       This improves reliability on office/proxy networks where WebSockets
-       can remain stuck even though normal HTTPS traffic works. */
-    try {
-      if (db.INTERNAL && typeof db.INTERNAL.forceLongPolling === "function") {
-        db.INTERNAL.forceLongPolling();
-      }
-    } catch (error) {
-      console.warn("Long-polling transport could not be enabled:", error);
-    }
-
+    let db = null;
+    let auth = null;
     let dataRef = null;
     let dataListener = null;
     let connectionRef = null;
@@ -458,6 +398,7 @@ const analytics = getAnalytics(app);
     let mastersUnlocked = false;
     let pendingPasswordAction = null;
     let reconnectTimer = null;
+    let serverTime = firebase.database ? firebase.database.ServerValue.TIMESTAMP : null;
 
     function emptyState() {
       return { schemaVersion:2, masters:{ offices:{}, suppliedTo:{}, invoices:{}, items:{} }, inventory:{}, transactions:{}, audit:{}, meta:{} };
@@ -476,7 +417,7 @@ const analytics = getAnalytics(app);
     function nowISO() { return new Date().toISOString(); }
     function today() { return new Date().toISOString().slice(0,10); }
     function newId() { return db.ref().push().key; }
-    function actor() { return user ? REQUIRED_EMPLOYEE_ID : "unknown"; }
+    function actor() { return REQUIRED_EMPLOYEE_ID; }
     function escapeHtml(value) {
       return String(value == null ? "" : value).replace(/[&<>"']/g, function(character) {
         return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[character];
@@ -507,35 +448,20 @@ const analytics = getAnalytics(app);
       document.getElementById("sync-text").textContent = text;
       dot.className = "sync-dot" + (type === "ok" ? " ok" : type === "bad" ? " bad" : "");
     }
-    function showLoginError(message) {
-      const element = document.getElementById("login-error");
-      element.textContent = message;
-      element.classList.add("visible");
-    }
-    function clearLoginError() {
-      const element = document.getElementById("login-error");
-      element.textContent = "";
-      element.classList.remove("visible");
-    }
+
     function friendlyError(error) {
       const code = error && error.code || "";
-      if (code.indexOf("permission-denied") >= 0) return "permission denied. Check the Firebase rules in the setup notes.";
+      if (code.indexOf("permission-denied") >= 0) return "permission denied. Check Firebase rules.";
       if (code.indexOf("network-request-failed") >= 0) return "network request failed.";
       return error && error.message || "unknown database error.";
     }
     function requireLiveConnection() {
-      if (!user || !dataRef) { alert("The shared inventory session is not ready. Please wait for the Live status before uploading."); return false; }
+      if (!dataRef) { alert("The shared inventory session is not ready."); return false; }
       if (!isConnected) { alert("The shared database is offline. Reconnect before saving so no record is duplicated or lost."); return false; }
       return true;
     }
 
     async function ensureLiveConnection() {
-      const currentUser = auth.currentUser || user;
-      if (!currentUser) {
-        throw new Error("Your sign-in session is no longer available. Please sign in again.");
-      }
-      user = currentUser;
-
       if (!dataRef) dataRef = db.ref(APP_ROOT);
       if (!connectionRef || !connectionListener) startConnectionListener();
       try { db.goOnline(); } catch (ignore) {}
@@ -557,72 +483,17 @@ const analytics = getAnalytics(app);
             }
           };
           const tempListener = function(snapshot) {
-            finish(snapshot.val() === true, new Error("The shared database is offline or still connecting. Please try again when the status shows Live."));
+            finish(snapshot.val() === true, new Error("The shared database is offline or still connecting. Please try again when status shows Live."));
           };
           tempRef.on("value",tempListener,function(error) {
             finish(false,new Error("Firebase connection check failed: " + friendlyError(error)));
           });
           setTimeout(function() {
-            finish(false,new Error("The shared database is offline or still connecting. Please try the upload again after the status shows Live."));
+            finish(false,new Error("The shared database is offline. Try again after status shows Live."));
           },15000);
         });
       }
-
       return true;
-    }
-
-    /* Copies pre-existing localStorage-era data at the shared legacy root into v2 only once. */
-    async function migrateLegacyDataOnce() {
-      const legacyRef = db.ref(LEGACY_ROOT);
-      await new Promise(function(resolve,reject) {
-        legacyRef.transaction(function(root) {
-          root = asObject(root);
-          if (root.v2) return root;
-          const next = emptyState();
-          const officeIds = {}, suppliedToIds = {}, invoiceIds = {}, itemIds = {};
-          function addMaster(group,name,lookup) {
-            const clean = String(name == null ? "" : name).trim();
-            if (!clean) return null;
-            const key = clean.toLocaleLowerCase();
-            if (lookup[key]) return lookup[key];
-            const id = newId();
-            lookup[key] = id;
-            next.masters[group][id] = { id:id, name:clean, active:true, createdAt:serverTime, createdBy:actor(), imported:true };
-            if (group === "items") next.inventory[id] = { itemId:id, quantity:0, updatedAt:serverTime, updatedBy:actor() };
-            return id;
-          }
-          (Array.isArray(root.offices) ? root.offices : []).forEach(function(value) { addMaster("offices",value,officeIds); });
-          (Array.isArray(root.suppliedTo) ? root.suppliedTo : []).forEach(function(value) { addMaster("suppliedTo",value,suppliedToIds); });
-          (Array.isArray(root.invoiceNumbers) ? root.invoiceNumbers : []).forEach(function(value) { addMaster("invoices",value,invoiceIds); });
-          (Array.isArray(root.items) ? root.items : []).forEach(function(value) {
-            const id = addMaster("items",value && typeof value === "object" ? value.name : value,itemIds);
-            if (id) next.inventory[id].quantity = Math.max(0,numeric(value && value.stock));
-          });
-          function ensureItem(name) { return addMaster("items",name,itemIds); }
-          function importedRecord(kind,old,lines,details) {
-            const id = newId();
-            next.transactions[id] = { id:id, type:kind, reference:String(old.invoiceNo || old.invNo || old.gemNo || "Imported record"), transactionDate:old.date || "", lines:lines, details:details, createdAt:serverTime, clientRecordedAt:nowISO(), createdBy:"legacy import", imported:true };
-          }
-          (Array.isArray(root.receiveLogs) ? root.receiveLogs : []).forEach(function(old) {
-            old = old || {};
-            const id = ensureItem(old.itemName);
-            importedRecord("RECEIPT",old,id ? [{ itemId:id, itemName:String(old.itemName || ""), change:Math.max(0,numeric(old.qty)) }] : [],{ supplier:old.firm || "", mode:old.mode || "", order:old.gemNo || old.invNo || "", amount:numeric(old.amount), note:"Imported from the previous application" });
-          });
-          (Array.isArray(root.issueLogs) ? root.issueLogs : []).forEach(function(old) {
-            old = old || {};
-            const lines = (Array.isArray(old.items) ? old.items : []).map(function(line) {
-              const item = line || {};
-              return { itemId:ensureItem(item.name), itemName:String(item.name || ""), change:-Math.abs(numeric(item.qty)) };
-            });
-            importedRecord("ISSUE",old,lines,{ office:old.office || "", suppliedTo:old.suppliedTo || "", note:old.additionalNoting || "Imported from the previous application" });
-          });
-          const auditId = newId();
-          next.audit[auditId] = { id:auditId, type:"LEGACY_MIGRATION", message:"Existing v1 data was copied into the permanent v2 structure; the original v1 data remains unchanged.", createdAt:serverTime, createdBy:actor() };
-          next.meta = { createdAt:serverTime, updatedAt:serverTime, migratedFromV1At:serverTime };
-          root.v2 = next;
-          return root;
-        }, function(error) { if (error) reject(error); else resolve(); });
-      });
     }
 
     function startConnectionListener() {
@@ -632,9 +503,7 @@ const analytics = getAnalytics(app);
       connectionListener = function(snapshot) {
         isConnected = snapshot.val() === true;
         setStatus(
-          isConnected
-            ? "Live — all systems are receiving changes"
-            : "Connecting to shared inventory…",
+          isConnected ? "Live — all systems are receiving changes" : "Connecting to shared inventory…",
           isConnected ? "ok" : ""
         );
       };
@@ -645,20 +514,15 @@ const analytics = getAnalytics(app);
 
       if (reconnectTimer) clearInterval(reconnectTimer);
       reconnectTimer = setInterval(function() {
-        if (!auth.currentUser) return;
         if (!isConnected) {
           try { db.goOnline(); } catch (ignore) {}
         }
       },8000);
     }
+
     async function beginDataSync() {
       setStatus("Connecting to shared inventory…");
       try {
-        if (auth.currentUser) user = auth.currentUser;
-        if (!user) throw new Error("Authentication is not ready.");
-
-        /* Bring the Realtime Database connection online immediately.
-           Do not block the live v2 listener on the legacy migration. */
         dataRef = db.ref(APP_ROOT);
         db.goOnline();
         startConnectionListener();
@@ -676,28 +540,11 @@ const analytics = getAnalytics(app);
             setStatus("Cloud access failed: " + friendlyError(error),"bad");
           }
         );
-
-        /* Legacy migration is intentionally non-blocking.  The current
-           v2 database stays usable even if an old-root migration is slow
-           or denied by Firebase rules. */
-        Promise.resolve()
-          .then(function() { return migrateLegacyDataOnce(); })
-          .catch(function(error) {
-            console.warn("Legacy migration skipped:", error);
-          });
-
       } catch (error) {
         setStatus("Cloud setup failed: " + friendlyError(error),"bad");
       }
     }
-    function stopDataSync() {
-      if (dataRef && dataListener) dataRef.off("value",dataListener);
-      if (connectionRef && connectionListener) connectionRef.off("value",connectionListener);
-      if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
-      try { db.goOffline(); } catch (ignore) {}
-      dataRef = null; dataListener = null; connectionRef = null; connectionListener = null;
-      state = emptyState(); isConnected = false; mastersUnlocked = false;
-    }
+
     async function commitChange(change) {
       return new Promise(function(resolve,reject) {
         dataRef.transaction(function(current) {
@@ -1012,7 +859,7 @@ const analytics = getAnalytics(app);
     function readWorkbook(file) {
       return new Promise(function(resolve,reject) {
         if (!file) { reject(new Error("Choose an Excel or CSV file first.")); return; }
-        if (typeof XLSX === "undefined") { reject(new Error("The Excel reader could not be loaded. Check the internet connection and try again.")); return; }
+        if (typeof XLSX === "undefined") { reject(new Error("The Excel reader could not be loaded. Check connection and try again.")); return; }
         const reader = new FileReader();
         reader.onerror = function() { reject(new Error("The selected file could not be read.")); };
         reader.onload = function(event) {
@@ -1031,12 +878,7 @@ const analytics = getAnalytics(app);
     }
     async function bulkUploadMasters() {
       if (!mastersUnlocked) return;
-      try {
-        await ensureLiveConnection();
-      } catch (error) {
-        alert(error.message || "The shared inventory connection is not ready. Please try again when the status shows Live.");
-        return;
-      }
+      try { await ensureLiveConnection(); } catch (error) { alert(error.message); return; }
       const fileInput = document.getElementById("bulk-master-file");
       const group = document.getElementById("bulk-master-type").value;
       try {
@@ -1061,30 +903,20 @@ const analytics = getAnalytics(app);
         });
         if (!result.committed) { alert("All entries already exist; nothing was changed."); return; }
         fileInput.value = "";
-        alert(added + " master entr" + (added === 1 ? "y was" : "ies were") + " added to the shared inventory.");
+        alert(added + " master entries added to the shared inventory.");
       } catch (error) { alert(error.message || "Could not import masters."); }
     }
     async function bulkUpdateMasterCard(group,fileInputId) {
       if (!mastersUnlocked) return;
-      try {
-        await ensureLiveConnection();
-      } catch (error) {
-        alert(error.message || "The shared inventory connection is not ready. Please try again when the status shows Live.");
-        return;
-      }
+      try { await ensureLiveConnection(); } catch (error) { alert(error.message); return; }
       const fileInput = document.getElementById(fileInputId);
       const groupLabel = { offices:"offices", suppliedTo:"supplied-to designations", invoices:"invoice / order numbers", items:"products / articles" }[group] || "master entries";
       try {
         const rows = await readWorkbook(fileInput.files[0]);
         const names = Array.from(new Set(rows.map(function(row) {
           return String(row[0] == null ? "" : row[0]).trim();
-        }).filter(function(name) {
-          return name && !isHeader(name);
-        })));
-        if (!names.length) {
-          alert("No usable names were found in the first column of the Excel file.");
-          return;
-        }
+        }).filter(function(name) { return name && !isHeader(name); })));
+        if (!names.length) { alert("No usable names were found in the first column."); return; }
 
         let added = 0;
         let reactivated = 0;
@@ -1115,15 +947,7 @@ const analytics = getAnalytics(app);
             }
 
             const id = newId();
-            next.masters[group][id] = {
-              id:id,
-              name:name,
-              active:true,
-              createdAt:serverTime,
-              clientCreatedAt:nowISO(),
-              createdBy:actor(),
-              imported:true
-            };
+            next.masters[group][id] = { id:id, name:name, active:true, createdAt:serverTime, clientCreatedAt:nowISO(), createdBy:actor(), imported:true };
             if (group === "items") {
               next.inventory[id] = { itemId:id, quantity:0, updatedAt:serverTime, updatedBy:actor() };
             }
@@ -1133,45 +957,26 @@ const analytics = getAnalytics(app);
 
           if (!added && !reactivated) return false;
 
-          writeAudit(
-            next,
-            "MASTER_BULK_UPDATED",
-            added + " new " + groupLabel + " added; " + reactivated + " retired " + groupLabel + " reactivated.",
-            { masterGroup:group, added:added, reactivated:reactivated, source:"dedicated master-card Excel upload" }
-          );
+          writeAudit(next, "MASTER_BULK_UPDATED", added + " new " + groupLabel + " added; " + reactivated + " retired " + groupLabel + " reactivated.", { masterGroup:group, added:added, reactivated:reactivated });
           return true;
         });
 
-        if (!result.committed) {
-          alert("All entries in this Excel file already exist and are active; nothing was changed.");
-          return;
-        }
-
+        if (!result.committed) { alert("All entries already exist and are active; nothing was changed."); return; }
         fileInput.value = "";
-        alert(
-          (added + reactivated) + " " + groupLabel +
-          " updated successfully (" + added + " added, " + reactivated + " reactivated)."
-        );
-      } catch (error) {
-        alert(error.message || "Could not update the master entries from Excel.");
-      }
+        alert((added + reactivated) + " " + groupLabel + " updated successfully.");
+      } catch (error) { alert(error.message || "Could not update the master entries."); }
     }
 
     async function bulkUploadOpeningBalances() {
       if (!mastersUnlocked) return;
-      try {
-        await ensureLiveConnection();
-      } catch (error) {
-        alert(error.message || "The shared inventory connection is not ready. Please try again when the status shows Live.");
-        return;
-      }
+      try { await ensureLiveConnection(); } catch (error) { alert(error.message); return; }
       const fileInput = document.getElementById("bulk-opening-file");
       try {
         const rows = await readWorkbook(fileInput.files[0]);
         const entries = rows.map(function(row) {
           return { name:String(row[0] == null ? "" : row[0]).trim(), quantity:numeric(row[1]) };
         }).filter(function(entry) { return entry.name && !isHeader(entry.name) && Number.isInteger(entry.quantity) && entry.quantity >= 0; });
-        if (!entries.length) { alert("No usable name-and-balance rows were found. Use article name in column A and whole-number balance in column B."); return; }
+        if (!entries.length) { alert("No usable rows found. Column A = Article Name, Column B = Quantity."); return; }
         const deduplicated = new Map();
         entries.forEach(function(entry) { deduplicated.set(entry.name.toLocaleLowerCase(),entry); });
         let changed = 0;
@@ -1200,14 +1005,14 @@ const analytics = getAnalytics(app);
           writeAudit(next,"OPENING_BALANCES_BULK_IMPORTED",changed + " stock balances updated.",{ count:changed });
           return true;
         });
-        if (!result.committed) { alert("Every supplied balance already matches the shared inventory."); return; }
+        if (!result.committed) { alert("Every supplied balance already matches."); return; }
         fileInput.value = "";
-        alert(changed + " opening balance" + (changed === 1 ? " was" : "s were") + " updated in the shared inventory.");
+        alert(changed + " opening balances updated.");
       } catch (error) { alert(error.message || "Could not import opening balances."); }
     }
     async function resetAllStocks() {
       if (!requireLiveConnection()) return;
-      if (!confirm("Reset every current stock balance to zero? Permanent transaction records will be retained as adjustment entries.")) return;
+      if (!confirm("Reset every current stock balance to zero? Permanent records will be kept.")) return;
       let changed = 0;
       try {
         const result = await commitChange(function(next) {
@@ -1225,7 +1030,7 @@ const analytics = getAnalytics(app);
           writeAudit(next,"INVENTORY_RESET",changed + " article balances reset to zero.",{ count:changed });
           return true;
         });
-        alert(result.committed ? "All non-zero stock balances were reset to zero and recorded permanently." : "All stock balances are already zero.");
+        alert(result.committed ? "All stock balances were reset to zero." : "All stock balances are already zero.");
       } catch (error) { alert("Could not reset inventory: " + friendlyError(error)); }
     }
 
@@ -1273,95 +1078,90 @@ const analytics = getAnalytics(app);
       function copy(title) {
         return '<div class="invoice-copy"><div class="copy-label">' + title + '</div><div style="display:flex;align-items:center;justify-content:center;gap:10px"><div style="width:32px;height:32px;background:#c41230;border-bottom:4px solid #ffcc00;border-radius:4px"></div><div style="text-align:left"><h2 style="margin:0;font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:1px">Stock Issue Invoice</h2><p style="margin:2px 0 0;font-size:8.5px;font-weight:600;color:#475569">O/O THE SUPERINTENDENT OF POST OFFICES • BHADRAK DIVISION, BHADRAK-756100</p></div></div><div style="display:flex;justify-content:space-between;margin-top:8px"><div><strong>Invoice No:</strong> ' + escapeHtml(record.reference) + '<br><strong>Issued To:</strong> ' + escapeHtml(record.details.suppliedTo) + ', ' + escapeHtml(record.details.office) + '</div><div style="text-align:right"><strong>Date:</strong> ' + formatInvoiceDate(record.transactionDate) + '</div></div><table><thead><tr><th style="width:12%;text-align:center">Sl No.</th><th style="text-align:left">Description of Article</th><th style="width:18%;text-align:center">Quantity</th></tr></thead><tbody>' + rows + '</tbody></table><div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px"><div style="font-size:9px;max-width:65%">' + (record.details.note ? '<strong>Remarks:</strong> ' + escapeHtml(record.details.note) + '<br>' : '') + '<em style="color:#475569">* Please acknowledge receipt of the above items to this office.</em></div><div class="signature-box"><div class="signature-line"></div>For Superintendent Of POs<br>Bhadrak Divn., Bhadrak</div></div></div>';
       }
-      document.getElementById("triplicate-container").className = "triplicate-page";
-      document.getElementById("triplicate-container").innerHTML = copy("ORIGINAL COPY") + copy("DUPLICATE COPY") + copy("TRIPLICATE COPY");
+      const container = document.getElementById("triplicate-container");
+      container.className = "triplicate-page";
+      container.innerHTML = copy("ORIGINAL COPY") + copy("DUPLICATE COPY") + copy("TRIPLICATE COPY");
       window.print();
     }
-    function reprintInvoice(id) {
-      const record = state.transactions[id];
-      if (!record || record.type !== "ISSUE") { alert("This issue record is no longer available."); return; }
-      generateAndPrintInvoice(record);
-    }
-    function updateClock() {
-      document.getElementById("live-clock").textContent = new Date().toLocaleString("en-IN",{ dateStyle:"medium", timeStyle:"medium" });
-    }
 
-    document.getElementById("login-form").addEventListener("submit",async function(event) {
-      event.preventDefault();
-      clearLoginError();
-      const employeeId = document.getElementById("login-employee-id").value.trim();
-      const password = document.getElementById("login-password").value;
-      const button = document.getElementById("login-button");
-      if (employeeId !== REQUIRED_EMPLOYEE_ID || password !== REQUIRED_PASSWORD) { showLoginError("Invalid Employee ID or password."); return; }
-      button.disabled = true;
-      button.textContent = "Signing in…";
-      try {
-        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-        await auth.signInAnonymously();
-      } catch (error) {
-        showLoginError(friendlyError(error));
-        button.disabled = false;
-        button.textContent = "Sign in to shared inventory";
+    /* Initialize Application on DOM Ready */
+    document.addEventListener("DOMContentLoaded", function() {
+      if (typeof firebase !== "undefined" && !firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
       }
-    });
-    document.getElementById("logout").addEventListener("click",function() { auth.signOut(); });
-    document.querySelectorAll(".tab-btn").forEach(function(button) {
-      button.addEventListener("click",function() {
-        if (button.dataset.tab === "masters-tab") requestMastersAccess();
-        else activateTab(button.dataset.tab);
-      });
-    });
-    document.getElementById("unlock-masters").addEventListener("click",requestMastersAccess);
-    document.getElementById("reset-stock").addEventListener("click",function() {
-      openPasswordModal("⚠️ Reset Inventory Stock to Zero",resetAllStocks);
-    });
-    document.getElementById("modal-cancel").addEventListener("click",closePasswordModal);
-    document.getElementById("modal-proceed").addEventListener("click",submitPassword);
-    document.getElementById("modal-password-input").addEventListener("keydown",function(event) {
-      if (event.key === "Enter") { event.preventDefault(); submitPassword(); }
-    });
-    document.getElementById("add-issue-row").addEventListener("click",function() { addIssueRow(); });
-    document.getElementById("clear-issue").addEventListener("click",clearIssueForm);
-    document.getElementById("issue-form").addEventListener("submit",saveIssue);
-    document.getElementById("receive-form").addEventListener("submit",saveReceipt);
-    document.getElementById("manual-opening-balance").addEventListener("submit",saveManualOpeningBalance);
-    document.getElementById("bulk-master-upload").addEventListener("click",bulkUploadMasters);
-    document.getElementById("bulk-opening-upload").addEventListener("click",bulkUploadOpeningBalances);
-    document.getElementById("register-search").addEventListener("input",renderStockRegister);
-    document.querySelectorAll("[data-bulk-master-group]").forEach(function(button) {
-      button.addEventListener("click",function() {
-        bulkUpdateMasterCard(button.dataset.bulkMasterGroup,button.dataset.bulkMasterFile);
-      });
-    });
-    document.querySelectorAll("[data-add-master]").forEach(function(button) {
-      button.addEventListener("click",function() { addMaster(button.dataset.addMaster); });
-    });
-    document.addEventListener("click",function(event) {
-      const retireButton = event.target.closest("[data-retire-master]");
-      if (retireButton) retireMaster(retireButton.dataset.retireMaster,retireButton.dataset.masterId);
-      const reprintButton = event.target.closest("[data-reprint-record]");
-      if (reprintButton) reprintInvoice(reprintButton.dataset.reprintRecord);
-    });
-    document.getElementById("issue-date").value = today();
-    document.getElementById("rec-date").value = today();
-    addIssueRow();
-    updateClock();
-    setInterval(updateClock,1000);
+      db = firebase.database();
+      auth = firebase.auth();
 
-    auth.onAuthStateChanged(async function(signedInUser) {
-      user = signedInUser;
-      if (!user) {
-        stopDataSync();
-        document.getElementById("app").style.display = "none";
-        document.getElementById("login-screen").style.display = "grid";
-        const button = document.getElementById("login-button");
-        button.disabled = false;
-        button.textContent = "Sign in to shared inventory";
-        return;
-      }
-      document.getElementById("login-screen").style.display = "none";
-      document.getElementById("app").style.display = "block";
-      await beginDataSync();
+      // Auto sign-in anonymously so cloud synchronization begins instantly
+      auth.signInAnonymously().catch(function(err) {
+        console.warn("Auth fallback:", err);
+      }).finally(function() {
+        user = auth.currentUser || { uid: "operator" };
+        beginDataSync();
+      });
+
+      // Navigation handler
+      document.querySelectorAll(".tab-btn").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          const tabId = btn.dataset.tab;
+          if (tabId === "masters-tab") {
+            requestMastersAccess();
+          } else {
+            activateTab(tabId);
+          }
+        });
+      });
+
+      // Form and Button Handlers
+      document.getElementById("add-issue-row").addEventListener("click", function() { addIssueRow(); });
+      document.getElementById("clear-issue").addEventListener("click", clearIssueForm);
+      document.getElementById("issue-form").addEventListener("submit", saveIssue);
+      document.getElementById("receive-form").addEventListener("submit", saveReceipt);
+      document.getElementById("manual-opening-balance").addEventListener("submit", saveManualOpeningBalance);
+      document.getElementById("reset-stock").addEventListener("click", resetAllStocks);
+      document.getElementById("register-search").addEventListener("input", renderStockRegister);
+
+      document.querySelectorAll("[data-add-master]").forEach(function(btn) {
+        btn.addEventListener("click", function() { addMaster(btn.dataset.addMaster); });
+      });
+
+      document.querySelectorAll("[data-bulk-master-group]").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          bulkUpdateMasterCard(btn.dataset.bulkMasterGroup, btn.dataset.bulkMasterFile);
+        });
+      });
+
+      document.getElementById("bulk-master-upload").addEventListener("click", bulkUploadMasters);
+      document.getElementById("bulk-opening-upload").addEventListener("click", bulkUploadOpeningBalances);
+      document.getElementById("unlock-masters").addEventListener("click", requestMastersAccess);
+      document.getElementById("modal-cancel").addEventListener("click", closePasswordModal);
+      document.getElementById("modal-proceed").addEventListener("click", submitPassword);
+
+      document.getElementById("modal-password-input").addEventListener("keyup", function(e) {
+        if (e.key === "Enter") submitPassword();
+      });
+
+      // Delegate event listeners for dynamic items
+      document.addEventListener("click", function(e) {
+        if (e.target.matches("[data-retire-master]")) {
+          retireMaster(e.target.dataset.retireMaster, e.target.dataset.masterId);
+        } else if (e.target.matches("[data-reprint-record]")) {
+          const recId = e.target.dataset.reprintRecord;
+          const rec = state.transactions[recId];
+          if (rec) generateAndPrintInvoice(rec);
+        }
+      });
+
+      // Live clock
+      setInterval(function() {
+        const clockEl = document.getElementById("live-clock");
+        if (clockEl) clockEl.textContent = new Date().toLocaleTimeString("en-IN", { hour12: true });
+      }, 1000);
+
+      // Default field settings
+      document.getElementById("issue-date").value = today();
+      document.getElementById("rec-date").value = today();
+      addIssueRow();
     });
   </script>
 </body>
