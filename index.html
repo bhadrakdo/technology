@@ -371,7 +371,7 @@
     let state = emptyState();
     let mastersUnlocked = true; // Auto-unlocked
     let reconnectTimer = null;
-    let serverTime = firebase.database ? firebase.database.ServerValue.TIMESTAMP : null;
+    let serverTime = null;
 
     function emptyState() {
       return { schemaVersion:2, masters:{ offices:{}, suppliedTo:{}, invoices:{}, items:{} }, inventory:{}, transactions:{}, audit:{}, meta:{} };
@@ -829,6 +829,55 @@
       } catch (error) { alert("Could not save the issue: " + friendlyError(error)); }
     }
 
+    function generateAndPrintInvoice(record) {
+      if (!record) return;
+      const container = document.getElementById("triplicate-container");
+      if (!container) return;
+
+      const copies = ["FIRST COPY — OFFICE COPY", "SECOND COPY — CONSIGNEE COPY", "THIRD COPY — MASTER COPY"];
+      const linesHtml = (record.lines || []).map(function(line, idx) {
+        return '<tr><td style="text-align:center;">' + (idx + 1) + '</td><td>' + escapeHtml(line.itemName) + '</td><td style="text-align:center;">' + Math.abs(numeric(line.change)) + '</td></tr>';
+      }).join("");
+
+      const pageHtml = '<div class="triplicate-page">' + copies.map(function(copyLabel) {
+        return '<div class="invoice-copy">' +
+          '<div class="copy-label">' + copyLabel + '</div>' +
+          '<div style="text-align:center; font-weight:800; font-size:11px; margin-bottom:4px;">BHADRAK POSTAL DIVISION — INVOICE / ISSUE MEMO</div>' +
+          '<div style="display:flex; justify-content:space-between; margin-bottom:4px;">' +
+            '<div><strong>Invoice No:</strong> ' + escapeHtml(record.reference) + '<br><strong>Issued To:</strong> ' + escapeHtml((record.details && record.details.suppliedTo) || "") + ' (' + escapeHtml((record.details && record.details.office) || "") + ')</div>' +
+            '<div style="text-align:right;"><strong>Date:</strong> ' + escapeHtml(record.transactionDate || "") + '</div>' +
+          '</div>' +
+          '<table><thead><tr><th style="width:40px;">Sl. No.</th><th>Description of Article</th><th style="width:70px;">Quantity</th></tr></thead><tbody>' +
+          linesHtml +
+          '</tbody></table>' +
+          (record.details && record.details.note ? '<div style="margin-top:4px;"><strong>Note:</strong> ' + escapeHtml(record.details.note) + '</div>' : '') +
+          '<div style="margin-top:auto; display:flex; justify-content:flex-end;"><div class="signature-box"><div class="signature-line"></div>Issuing Authority</div></div>' +
+          '</div>';
+      }).join("") + '</div>';
+
+      container.innerHTML = pageHtml;
+      window.print();
+    }
+
+    async function resetStockToZero() {
+      if (!mastersUnlocked || !requireLiveConnection()) return;
+      if (!confirm("Are you sure you want to reset ALL inventory stock balances to zero? This action cannot be undone.")) return;
+      try {
+        const result = await commitChange(function(next) {
+          Object.keys(next.inventory).forEach(function(itemId) {
+            next.inventory[itemId].quantity = 0;
+            next.inventory[itemId].updatedAt = serverTime;
+            next.inventory[itemId].updatedBy = actor();
+          });
+          writeAudit(next, "STOCK_RESET", "All stock balances reset to zero.");
+          return true;
+        });
+        if (result && result.committed) alert("All stock balances have been reset to zero.");
+      } catch (error) {
+        alert("Could not reset stock: " + friendlyError(error));
+      }
+    }
+
     function readWorkbook(file) {
       return new Promise(function(resolve,reject) {
         if (!file) { reject(new Error("Choose an Excel or CSV file first.")); return; }
@@ -847,12 +896,16 @@
     }
     function isHeader(value) {
       const word = String(value || "").trim().toLocaleLowerCase();
-      return ["name","item","items","product","product description","article","office","designation","invoice","invoice number","order number"].indexOf(word) >= 0;
+      return ["name","item","items","product","product description","article","office","designation","invoice","invoice number","order number","sl no","sl. no.","s.n."].indexOf(word) >= 0;
     }
     async function bulkUploadMasters() {
       if (!mastersUnlocked) return;
       try { await ensureLiveConnection(); } catch (error) { alert(error.message); return; }
       const fileInput = document.getElementById("bulk-master-file");
+      if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        alert("Please select an Excel or CSV file to upload.");
+        return;
+      }
       const group = document.getElementById("bulk-master-type").value;
       try {
         const rows = await readWorkbook(fileInput.files[0]);
@@ -883,39 +936,206 @@
       if (!mastersUnlocked) return;
       try { await ensureLiveConnection(); } catch (error) { alert(error.message); return; }
       const fileInput = document.getElementById(fileInputId);
+      if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        alert("Please select an Excel or CSV file first.");
+        return;
+      }
       const groupLabel = { offices:"offices", suppliedTo:"supplied-to designations", invoices:"invoice / order numbers", items:"products / articles" }[group] || "master entries";
       try {
         const rows = await readWorkbook(fileInput.files[0]);
         const names = Array.from(new Set(rows.map(function(row) {
           return String(row[0] == null ? "" : row[0]).trim();
-        })));
+        }).filter(function(name) { return name && !isHeader(name); })));
+        if (!names.length) { alert("No usable names were found in column A."); return; }
+
+        let added = 0;
+        const result = await commitChange(function(next) {
+          const existing = new Set(Object.values(next.masters[group]).filter(Boolean).map(function(value) { return String(value.name).trim().toLocaleLowerCase(); }));
+          names.forEach(function(name) {
+            const key = name.toLocaleLowerCase();
+            if (existing.has(key)) return;
+            const id = newId();
+            next.masters[group][id] = { id:id, name:name, active:true, createdAt:serverTime, clientCreatedAt:nowISO(), createdBy:actor(), imported:true };
+            if (group === "items") next.inventory[id] = { itemId:id, quantity:0, updatedAt:serverTime, updatedBy:actor() };
+            existing.add(key);
+            added++;
+          });
+          if (!added) return false;
+          writeAudit(next, "MASTERS_BULK_IMPORTED", added + " " + groupLabel + " imported.", { masterGroup:group, count:added });
+          return true;
+        });
+        if (!result.committed) { alert("All entries from the file already exist in " + groupLabel + "."); return; }
+        fileInput.value = "";
+        alert(added + " new " + groupLabel + " added successfully.");
+      } catch (error) { alert(error.message || "Could not import " + groupLabel + "."); }
+    }
+
+    async function bulkUploadOpeningBalances() {
+      if (!mastersUnlocked) return;
+      try { await ensureLiveConnection(); } catch (error) { alert(error.message); return; }
+      const fileInput = document.getElementById("bulk-opening-file");
+      if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        alert("Please select an Excel or CSV file for opening balances.");
+        return;
+      }
+      try {
+        const rows = await readWorkbook(fileInput.files[0]);
+        const validRows = rows.map(function(row) {
+          const name = String(row[0] == null ? "" : row[0]).trim();
+          const qty = numeric(row[1]);
+          return { name: name, qty: Math.max(0, Math.floor(qty)) };
+        }).filter(function(item) {
+          return item.name && !isHeader(item.name);
+        });
+
+        if (!validRows.length) {
+          alert("No valid product names and balances found in columns A and B.");
+          return;
+        }
+
+        let updatedCount = 0;
+        const result = await commitChange(function(next) {
+          validRows.forEach(function(row) {
+            let existingId = Object.keys(next.masters.items).find(function(id) {
+              const item = next.masters.items[id];
+              return item && item.name.trim().toLocaleLowerCase() === row.name.toLocaleLowerCase();
+            });
+
+            if (!existingId) {
+              existingId = newId();
+              next.masters.items[existingId] = {
+                id: existingId,
+                name: row.name,
+                active: true,
+                createdAt: serverTime,
+                clientCreatedAt: nowISO(),
+                createdBy: actor(),
+                imported: true
+              };
+            }
+
+            const prevQty = Math.max(0, numeric(next.inventory[existingId] && next.inventory[existingId].quantity));
+            next.inventory[existingId] = { itemId: existingId, quantity: row.qty, updatedAt: serverTime, updatedBy: actor() };
+
+            const adjId = newId();
+            next.transactions[adjId] = {
+              id: adjId,
+              type: "ADJUSTMENT",
+              reference: "Bulk OB Import",
+              transactionDate: today(),
+              lines: [{ itemId: existingId, itemName: row.name, change: row.qty - prevQty, balance: row.qty }],
+              details: { reason: "Bulk Opening Balance Import from Excel" },
+              createdAt: serverTime,
+              clientRecordedAt: nowISO(),
+              createdBy: actor()
+            };
+            updatedCount++;
+          });
+          if (!updatedCount) return false;
+          writeAudit(next, "BULK_OPENING_BALANCES_IMPORTED", updatedCount + " opening balances updated.", { count: updatedCount });
+          return true;
+        });
+
+        if (!result.committed) {
+          alert("No opening balances were updated.");
+          return;
+        }
+        fileInput.value = "";
+        alert(updatedCount + " opening balances updated successfully.");
       } catch (error) {
-        // ... (Truncated bulk logic from your original code remains here, assuming there's more omitted in your input)
+        alert(error.message || "Could not upload opening balances.");
       }
     }
 
-    // Simplified Tab Logic
     function activateTab(tabId) {
       document.querySelectorAll(".tab-btn").forEach(function(btn) { btn.classList.toggle("active", btn.dataset.tab === tabId); });
       document.querySelectorAll(".tab-content").forEach(function(content) { content.classList.toggle("active", content.id === tabId); });
     }
-    
-    document.querySelectorAll(".tab-btn").forEach(function(btn) {
-      btn.addEventListener("click", function() {
-        activateTab(btn.dataset.tab);
+
+    function initEventListeners() {
+      document.querySelectorAll(".tab-btn").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          activateTab(btn.dataset.tab);
+        });
       });
+
+      const issueForm = document.getElementById("issue-form");
+      if (issueForm) issueForm.addEventListener("submit", saveIssue);
+
+      const receiveForm = document.getElementById("receive-form");
+      if (receiveForm) receiveForm.addEventListener("submit", saveReceipt);
+
+      const manualObForm = document.getElementById("manual-opening-balance");
+      if (manualObForm) manualObForm.addEventListener("submit", saveManualOpeningBalance);
+
+      const addRowBtn = document.getElementById("add-issue-row");
+      if (addRowBtn) addRowBtn.addEventListener("click", function() { addIssueRow(); });
+
+      const clearIssueBtn = document.getElementById("clear-issue");
+      if (clearIssueBtn) clearIssueBtn.addEventListener("click", clearIssueForm);
+
+      const resetBtn = document.getElementById("reset-stock");
+      if (resetBtn) resetBtn.addEventListener("click", resetStockToZero);
+
+      document.querySelectorAll("[data-add-master]").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          addMaster(btn.dataset.addMaster);
+        });
+      });
+
+      document.querySelectorAll("[data-bulk-master-group]").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          bulkUpdateMasterCard(btn.dataset.bulkMasterGroup, btn.dataset.bulkMasterFile);
+        });
+      });
+
+      const bulkMasterUploadBtn = document.getElementById("bulk-master-upload");
+      if (bulkMasterUploadBtn) bulkMasterUploadBtn.addEventListener("click", bulkUploadMasters);
+
+      const bulkOpeningUploadBtn = document.getElementById("bulk-opening-upload");
+      if (bulkOpeningUploadBtn) bulkOpeningUploadBtn.addEventListener("click", bulkUploadOpeningBalances);
+
+      const searchInput = document.getElementById("register-search");
+      if (searchInput) searchInput.addEventListener("input", renderStockRegister);
+
+      document.addEventListener("click", function(e) {
+        const retireBtn = e.target.closest("[data-retire-master]");
+        if (retireBtn) {
+          retireMaster(retireBtn.dataset.retireMaster, retireBtn.dataset.masterId);
+          return;
+        }
+        const reprintBtn = e.target.closest("[data-reprint-record]");
+        if (reprintBtn) {
+          const recId = reprintBtn.dataset.reprintRecord;
+          const rec = state.transactions[recId];
+          if (rec) generateAndPrintInvoice(rec);
+        }
+      });
+    }
+
+    function startClock() {
+      const clockEl = document.getElementById("live-clock");
+      if (!clockEl) return;
+      function update() {
+        clockEl.textContent = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "medium" });
+      }
+      update();
+      setInterval(update, 1000);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById("issue-date").value = today();
+      document.getElementById("rec-date").value = today();
+      addIssueRow();
+      initEventListeners();
+      startClock();
+
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      auth = firebase.auth();
+      serverTime = firebase.database.ServerValue.TIMESTAMP;
+      beginDataSync();
     });
-// 1. Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-
-// 2. Assign Database and Auth instances to your variables
-db = firebase.database();
-auth = firebase.auth();
-
-// 3. Start the connection and data sync when the page loads
-window.addEventListener('DOMContentLoaded', () => {
-  beginDataSync();
-});
   </script>
 </body>
 </html>
