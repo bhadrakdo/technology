@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -94,13 +95,9 @@
       </div>
       <form id="login-form" class="login-body">
         <p id="login-error" class="error" role="alert"></p>
-        <div class="field"><label for="login-email">Authorised email address</label><input id="login-email" type="email" autocomplete="username" required placeholder="name@department.gov.in"></div>
-        <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required></div>
-        <div class="field"><label for="login-employee-id">Employee ID</label><input id="login-employee-id" type="text" inputmode="numeric" autocomplete="username" value="10179252" readonly required></div>
-        <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" value="Muneer*1993" required></div>
+        <div class="field"><label for="login-employee-id">Employee ID</label><input id="login-employee-id" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter Employee ID" required></div>
+        <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" placeholder="Enter Password" required></div>
         <button id="login-button" class="button" type="submit" style="width:100%">Sign in to shared inventory</button>
-        <p class="note">Every computer must use this same deployed page, Firebase project and authorised account. Data is never kept as the inventory source in this browser.</p>
-        <p class="note"><button id="reset-password" type="button" style="border:0;background:none;padding:0;color:#9f1239;text-decoration:underline">Send password-reset email</button></p>
         <p class="note">Every computer must use this same deployed page and Firebase project. Data is never kept as the inventory source in this browser.</p>
       </form>
     </div>
@@ -225,8 +222,6 @@
     const APP_ROOT = LEGACY_ROOT + "/v2";
     const REQUIRED_EMPLOYEE_ID = "10179252";
     const REQUIRED_PASSWORD = "Muneer*1993";
-    // Firebase Authentication requires an email internally. This mapping keeps the user-facing login as Employee ID.
-    const FIREBASE_AUTH_EMAIL = "10179252@inventory.local";
     const serverTime = firebase.database.ServerValue.TIMESTAMP;
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
@@ -256,7 +251,7 @@
     function numeric(value) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
     function nowISO() { return new Date().toISOString(); }
     function newId() { return db.ref().push().key; }
-    function actor() { return user && (user.email || user.uid) || "unknown"; }
+    function actor() { return user ? REQUIRED_EMPLOYEE_ID : "unknown"; }
     function escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>'\"]/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", "\"":"&quot;" })[ch]); }
     function activeEntries(group) { return Object.entries(state.masters[group] || {}).filter(([, value]) => value && value.active !== false).sort((a,b) => String(a[1].name).localeCompare(String(b[1].name))); }
     function itemName(id, fallback) { return state.masters.items[id] && state.masters.items[id].name || fallback || "Unknown item"; }
@@ -573,17 +568,11 @@
 
     document.getElementById("login-form").addEventListener("submit", async event => {
       event.preventDefault(); clearLoginError();
-      const email = document.getElementById("login-email").value.trim(); const password = document.getElementById("login-password").value; const button = document.getElementById("login-button");
       const employeeId = document.getElementById("login-employee-id").value.trim(); const password = document.getElementById("login-password").value; const button = document.getElementById("login-button");
       if (employeeId !== REQUIRED_EMPLOYEE_ID || password !== REQUIRED_PASSWORD) { showLoginError("Invalid Employee ID or password."); return; }
       button.disabled = true; button.textContent = "Signing in…";
-      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); await auth.signInWithEmailAndPassword(email,password); }
-      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); await auth.signInWithEmailAndPassword(FIREBASE_AUTH_EMAIL,password); }
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); await auth.signInAnonymously(); }
       catch (error) { showLoginError(friendlyError(error)); button.disabled = false; button.textContent = "Sign in to shared inventory"; }
-    });
-    document.getElementById("reset-password").addEventListener("click", async () => {
-      const email = document.getElementById("login-email").value.trim(); if (!email) { showLoginError("Enter your authorised email address first."); return; }
-      try { await auth.sendPasswordResetEmail(email); alert("A password-reset email has been sent if the account exists."); } catch (error) { showLoginError(friendlyError(error)); }
     });
     document.getElementById("logout").addEventListener("click", () => auth.signOut());
     document.querySelectorAll(".tab").forEach(button => button.addEventListener("click", () => { document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active",tab === button)); document.querySelectorAll("main section").forEach(section => section.classList.toggle("active",section.id === button.dataset.tab)); }));
@@ -600,7 +589,6 @@
     auth.onAuthStateChanged(async signedInUser => {
       user = signedInUser;
       if (!user) { stopDataSync(); document.getElementById("app").style.display = "none"; document.getElementById("login-screen").style.display = "grid"; return; }
-      document.getElementById("signed-in-user").textContent = user.email || user.uid;
       document.getElementById("signed-in-user").textContent = "Employee ID: " + REQUIRED_EMPLOYEE_ID;
       document.getElementById("login-screen").style.display = "none"; document.getElementById("app").style.display = "block";
       await beginDataSync();
