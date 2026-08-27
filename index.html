@@ -432,6 +432,17 @@
     const auth = firebase.auth();
     const db = firebase.database();
 
+    /* Use Firebase Realtime Database long-polling transport explicitly.
+       This improves reliability on office/proxy networks where WebSockets
+       can remain stuck even though normal HTTPS traffic works. */
+    try {
+      if (db.INTERNAL && typeof db.INTERNAL.forceLongPolling === "function") {
+        db.INTERNAL.forceLongPolling();
+      }
+    } catch (error) {
+      console.warn("Long-polling transport could not be enabled:", error);
+    }
+
     let dataRef = null;
     let dataListener = null;
     let connectionRef = null;
@@ -441,6 +452,7 @@
     let state = emptyState();
     let mastersUnlocked = false;
     let pendingPasswordAction = null;
+    let reconnectTimer = null;
 
     function emptyState() {
       return { schemaVersion:2, masters:{ offices:{}, suppliedTo:{}, invoices:{}, items:{} }, inventory:{}, transactions:{}, audit:{}, meta:{} };
@@ -519,34 +531,35 @@
       }
       user = currentUser;
 
-      /* Re-create the shared data reference whenever a click happens before
-         the normal sync listener has finished, or after a transient Firebase
-         auth/network state change. This prevents a valid signed-in user from
-         being mistaken for a logged-out user. */
       if (!dataRef) dataRef = db.ref(APP_ROOT);
-
       if (!connectionRef || !connectionListener) startConnectionListener();
+      try { db.goOnline(); } catch (ignore) {}
 
       if (!isConnected) {
         await new Promise(function(resolve,reject) {
           let settled = false;
-          let tempRef = db.ref(".info/connected");
-          const tempListener = function(snapshot) {
-            if (snapshot.val() === true && !settled) {
-              settled = true;
-              tempRef.off("value",tempListener);
-              isConnected = true;
-              setStatus("Live — all systems are receiving changes","ok");
-              resolve();
-            }
-          };
-          tempRef.on("value",tempListener);
-          setTimeout(function() {
+          const tempRef = db.ref(".info/connected");
+          const finish = function(ok,error) {
             if (settled) return;
             settled = true;
             tempRef.off("value",tempListener);
-            reject(new Error("The shared database is offline or still connecting. Please try the upload again when the status shows Live."));
-          },10000);
+            if (ok) {
+              isConnected = true;
+              setStatus("Live — all systems are receiving changes","ok");
+              resolve();
+            } else {
+              reject(error || new Error("The shared database is not connected."));
+            }
+          };
+          const tempListener = function(snapshot) {
+            finish(snapshot.val() === true, new Error("The shared database is offline or still connecting. Please try again when the status shows Live."));
+          };
+          tempRef.on("value",tempListener,function(error) {
+            finish(false,new Error("Firebase connection check failed: " + friendlyError(error)));
+          });
+          setTimeout(function() {
+            finish(false,new Error("The shared database is offline or still connecting. Please try the upload again after the status shows Live."));
+          },15000);
         });
       }
 
@@ -609,23 +622,65 @@
 
     function startConnectionListener() {
       if (connectionRef && connectionListener) connectionRef.off("value",connectionListener);
+      try { db.goOnline(); } catch (ignore) {}
       connectionRef = db.ref(".info/connected");
       connectionListener = function(snapshot) {
         isConnected = snapshot.val() === true;
-        setStatus(isConnected ? "Live — all systems are receiving changes" : "Offline — no changes can be saved",isConnected ? "ok" : "bad");
+        setStatus(
+          isConnected
+            ? "Live — all systems are receiving changes"
+            : "Connecting to shared inventory…",
+          isConnected ? "ok" : ""
+        );
       };
-      connectionRef.on("value",connectionListener);
+      connectionRef.on("value",connectionListener,function(error) {
+        isConnected = false;
+        setStatus("Firebase connection check failed: " + friendlyError(error),"bad");
+      });
+
+      if (reconnectTimer) clearInterval(reconnectTimer);
+      reconnectTimer = setInterval(function() {
+        if (!auth.currentUser) return;
+        if (!isConnected) {
+          try { db.goOnline(); } catch (ignore) {}
+        }
+      },8000);
     }
     async function beginDataSync() {
-      setStatus("Preparing shared inventory…");
+      setStatus("Connecting to shared inventory…");
       try {
         if (auth.currentUser) user = auth.currentUser;
+        if (!user) throw new Error("Authentication is not ready.");
+
+        /* Bring the Realtime Database connection online immediately.
+           Do not block the live v2 listener on the legacy migration. */
         dataRef = db.ref(APP_ROOT);
-        await migrateLegacyDataOnce();
-        if (!user) return;
-        dataListener = function(snapshot) { state = cleanState(snapshot.val()); renderAll(); };
-        dataRef.on("value",dataListener,function(error) { setStatus("Cloud access failed: " + friendlyError(error),"bad"); });
+        db.goOnline();
         startConnectionListener();
+
+        if (dataListener) dataRef.off("value",dataListener);
+        dataListener = function(snapshot) {
+          state = cleanState(snapshot.val());
+          renderAll();
+          if (isConnected) setStatus("Live — all systems are receiving changes","ok");
+        };
+        dataRef.on(
+          "value",
+          dataListener,
+          function(error) {
+            setStatus("Cloud access failed: " + friendlyError(error),"bad");
+          }
+        );
+
+        /* Legacy migration is intentionally non-blocking.  The current
+           v2 database stays usable even if an old-root migration is slow
+           or denied by Firebase rules. */
+        Promise.resolve()
+          .then(function() { return migrateLegacyDataOnce(); })
+          .catch(function(error) {
+            console.warn("Legacy migration skipped:", error);
+          });
+
       } catch (error) {
         setStatus("Cloud setup failed: " + friendlyError(error),"bad");
       }
@@ -633,6 +688,8 @@
     function stopDataSync() {
       if (dataRef && dataListener) dataRef.off("value",dataListener);
       if (connectionRef && connectionListener) connectionRef.off("value",connectionListener);
+      if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+      try { db.goOffline(); } catch (ignore) {}
       dataRef = null; dataListener = null; connectionRef = null; connectionListener = null;
       state = emptyState(); isConnected = false; mastersUnlocked = false;
     }
