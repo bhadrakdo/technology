@@ -192,7 +192,7 @@
             </div>
             <div class="table-container">
               <table>
-                <thead><tr><th>Sl. No.</th><th>Description of Article</th><th>Available Stock</th><th>Issue Quantity</th><th>Balance After Issue</th><th>Action</th></tr></thead>
+                <thead><tr><th>Sl. No.</th><th>Description of Article</th><th>Serial Number(s)</th><th>Available Stock</th><th>Issue Quantity</th><th>Balance After Issue</th><th>Action</th></tr></thead>
                 <tbody id="issue-items-body"></tbody>
               </table>
             </div>
@@ -305,6 +305,17 @@
               </div>
               <ul id="items-list" class="master-list"></ul>
             </div>
+            
+            <div class="card">
+              <h2 class="card-title">🏷️ Serial Numbers</h2>
+              <div class="master-add"><div class="form-group"><label for="new-serial">Serial Number</label><input id="new-serial" maxlength="200" placeholder="Enter serial number"></div><button class="btn btn-primary" data-add-master="serialNumbers" type="button">Add</button></div>
+              <div class="form-grid" style="margin-top:14px">
+                <div class="form-group"><label for="bulk-serial-file">Bulk Update Serial Numbers from Excel</label><input id="bulk-serial-file" type="file" accept=".xlsx,.xls,.csv"></div>
+                <div class="button-row"><button class="btn btn-secondary" id="bulk-serial-upload" data-bulk-master-group="serialNumbers" data-bulk-master-file="bulk-serial-file" type="button">Upload / Update Serials</button></div>
+              </div>
+              <ul id="serialNumbers-list" class="master-list"></ul>
+            </div>
+
           </div>
 
           <div class="card">
@@ -325,7 +336,14 @@
               <h2 class="card-title">📄 Bulk Upload Masters</h2>
               <p class="subtle">The first column in the first Excel sheet is used. Header rows are ignored.</p>
               <div class="form-grid">
-                <div class="form-group"><label for="bulk-master-type">Master Type</label><select id="bulk-master-type"><option value="items">Products / Articles</option><option value="offices">Offices</option><option value="suppliedTo">Supplied-To Designations</option><option value="invoices">Invoice / Order Numbers</option></select></div>
+                <div class="form-group"><label for="bulk-master-type">Master Type</label>
+                <select id="bulk-master-type">
+                    <option value="items">Products / Articles</option>
+                    <option value="offices">Offices</option>
+                    <option value="suppliedTo">Supplied-To Designations</option>
+                    <option value="invoices">Invoice / Order Numbers</option>
+                    <option value="serialNumbers">Serial Numbers</option>
+                </select></div>
                 <div class="form-group"><label for="bulk-master-file">Excel File</label><input id="bulk-master-file" type="file" accept=".xlsx,.xls,.csv"></div>
               </div>
               <div class="button-row"><button id="bulk-master-upload" class="btn btn-secondary" type="button">Upload Masters</button></div>
@@ -339,6 +357,10 @@
           </div>
         </div>
       </section>
+
+      <!-- Datalist for Serial Numbers auto-complete -->
+      <datalist id="serial-numbers-list"></datalist>
+
     </main>
 
     <div id="print-section" aria-hidden="true"><div id="triplicate-container"></div></div>
@@ -374,7 +396,7 @@
     let serverTime = null;
 
     function emptyState() {
-      return { schemaVersion:2, masters:{ offices:{}, suppliedTo:{}, invoices:{}, items:{} }, inventory:{}, transactions:{}, audit:{}, meta:{} };
+      return { schemaVersion:2, masters:{ offices:{}, suppliedTo:{}, invoices:{}, items:{}, serialNumbers:{} }, inventory:{}, transactions:{}, audit:{}, meta:{} };
     }
     function asObject(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
     function cleanState(raw) {
@@ -382,7 +404,7 @@
       const masters = asObject(source.masters);
       return {
         schemaVersion:2,
-        masters:{ offices:asObject(masters.offices), suppliedTo:asObject(masters.suppliedTo), invoices:asObject(masters.invoices), items:asObject(masters.items) },
+        masters:{ offices:asObject(masters.offices), suppliedTo:asObject(masters.suppliedTo), invoices:asObject(masters.invoices), items:asObject(masters.items), serialNumbers:asObject(masters.serialNumbers) },
         inventory:asObject(source.inventory), transactions:asObject(source.transactions), audit:asObject(source.audit), meta:asObject(source.meta)
       };
     }
@@ -564,6 +586,11 @@
       refreshSelect("rec-item","items","-- Select Article --");
       refreshSelect("manual-ob-item","items","-- Select Article --");
       document.querySelectorAll(".issue-item-select").forEach(refreshIssueSelect);
+      
+      const snList = document.getElementById("serial-numbers-list");
+      if (snList) {
+          snList.innerHTML = activeEntries("serialNumbers").map(function(pair) { return '<option value="' + escapeHtml(pair[1].name) + '">'; }).join("");
+      }
     }
     function renderAll() {
       renderStockRegister();
@@ -601,7 +628,7 @@
       issueBody.innerHTML = issueLogs.length ? issueLogs.map(function(record) {
         const details = asObject(record.details);
         const lines = (Array.isArray(record.lines) ? record.lines : []).map(function(line) {
-          return escapeHtml(line.itemName || itemName(line.itemId)) + ' <strong>(x' + Math.abs(numeric(line.change)) + ')</strong>';
+          return escapeHtml(line.itemName || itemName(line.itemId)) + (line.serialNumber ? ' <small>[SN: ' + escapeHtml(line.serialNumber) + ']</small>' : '') + ' <strong>(x' + Math.abs(numeric(line.change)) + ')</strong>';
         }).join("<br>");
         return '<tr><td>' + escapeHtml(record.transactionDate || formatWhen(record.createdAt)) + '</td><td><strong>' + escapeHtml(record.reference) + '</strong></td><td>' + escapeHtml(details.suppliedTo || "") + '<br><small>' + escapeHtml(details.office || "") + '</small></td><td>' + (lines || "—") + '</td><td><button class="btn btn-secondary btn-small" type="button" data-reprint-record="' + escapeHtml(record.id) + '">Re-print</button></td></tr>';
       }).join("") : '<tr><td colspan="5" class="empty-cell">No issue records yet.</td></tr>';
@@ -625,12 +652,13 @@
       renderMasterList("suppliedTo","suppliedTo-list");
       renderMasterList("invoices","invoices-list");
       renderMasterList("items","items-list");
+      renderMasterList("serialNumbers","serialNumbers-list");
     }
 
     function addIssueRow(selected,quantity) {
       const tbody = document.getElementById("issue-items-body");
       const row = document.createElement("tr");
-      row.innerHTML = '<td class="issue-line-number"></td><td><select class="issue-item-select inline-input" required></select></td><td class="avail-stock-cell">0</td><td><input type="number" class="issue-qty-input inline-input" min="1" step="1" required></td><td class="balance-stock-cell">0</td><td><button class="btn btn-danger btn-small remove-issue-row" type="button">Remove</button></td>';
+      row.innerHTML = '<td class="issue-line-number"></td><td><select class="issue-item-select inline-input" required></select></td><td><input type="text" class="issue-serial-input inline-input" list="serial-numbers-list" placeholder="Enter or select"></td><td class="avail-stock-cell">0</td><td><input type="number" class="issue-qty-input inline-input" min="1" step="1" required></td><td class="balance-stock-cell">0</td><td><button class="btn btn-danger btn-small remove-issue-row" type="button">Remove</button></td>';
       const select = row.querySelector(".issue-item-select");
       select.innerHTML = selectOptions(activeEntries("items"),selected || "","-- Select Article --");
       row.querySelector(".issue-qty-input").value = quantity == null ? 1 : quantity;
@@ -681,17 +709,18 @@
       let invalid = false;
       Array.from(document.querySelectorAll("#issue-items-body tr")).forEach(function(row) {
         const itemId = row.querySelector(".issue-item-select").value;
+        const serialNumber = row.querySelector(".issue-serial-input").value.trim();
         const quantity = numeric(row.querySelector(".issue-qty-input").value);
         if (!itemId || !Number.isInteger(quantity) || quantity < 1 || seen.has(itemId)) invalid = true;
         if (itemId) seen.add(itemId);
-        if (itemId && Number.isInteger(quantity) && quantity >= 1) lines.push({ itemId:itemId, quantity:quantity });
+        if (itemId && Number.isInteger(quantity) && quantity >= 1) lines.push({ itemId:itemId, quantity:quantity, serialNumber:serialNumber });
       });
       return { invalid:invalid, lines:lines };
     }
 
     async function addMaster(group) {
       if (!mastersUnlocked || !requireLiveConnection()) return;
-      const map = { offices:"new-office", suppliedTo:"new-supplied-to", invoices:"new-invoice", items:"new-item" };
+      const map = { offices:"new-office", suppliedTo:"new-supplied-to", invoices:"new-invoice", items:"new-item", serialNumbers:"new-serial" };
       const input = document.getElementById(map[group]);
       const name = input.value.trim();
       if (!name) { input.focus(); return; }
@@ -815,7 +844,7 @@
             const newStock = oldStock - row.quantity;
             if (newStock < 0) { failure = "Cannot issue " + row.quantity + " of " + item.name + ". A concurrent change reduced the shared balance to " + oldStock + "."; return false; }
             next.inventory[row.itemId] = { itemId:row.itemId, quantity:newStock, updatedAt:serverTime, updatedBy:actor() };
-            finalLines.push({ itemId:row.itemId, itemName:item.name, change:-row.quantity, balance:newStock });
+            finalLines.push({ itemId:row.itemId, itemName:item.name, serialNumber:row.serialNumber, change:-row.quantity, balance:newStock });
           }
           const details = { officeId:officeId, office:office.name, suppliedToId:suppliedToId, suppliedTo:suppliedTo.name, invoiceId:invoiceId, invoice:invoice.name, notes:notes };
           printableRecord = { id:id, type:"ISSUE", reference:invoice.name, transactionDate:transactionDate, lines:finalLines, details:details, createdAt:serverTime, clientRecordedAt:nowISO(), createdBy:actor() };
@@ -933,7 +962,7 @@
         let tableRows = "";
         let pageCount = 0;
         (record.lines || []).forEach(function(line,index) {
-          tableRows += '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(line.itemName) + '</td><td>' + Math.abs(numeric(line.change)) + '</td><td></td></tr>';
+          tableRows += '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(line.itemName) + (line.serialNumber ? '<br><small>SN: ' + escapeHtml(line.serialNumber) + '</small>' : '') + '</td><td>' + Math.abs(numeric(line.change)) + '</td><td></td></tr>';
           pageCount++;
         });
         while (pageCount < 6) {
