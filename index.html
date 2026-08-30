@@ -113,7 +113,12 @@
     #app .stock-good { color:#34d399; font-weight:800; }
     #app .stock-low { color:#fbbf24; font-weight:800; }
     #app .stock-none { color:#f87171; font-weight:800; }
-    
+
+    /* Modal styling for editing logs */
+    .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center; }
+    .modal-overlay.active { display:flex; }
+    .modal-card { background:var(--card-bg); border:1px solid var(--border); padding:30px; border-radius:16px; width:100%; max-width:550px; box-shadow:0 15px 35px #000a; }
+
     #print-section { display:none; }
 
     @media (max-width:760px) {
@@ -259,7 +264,7 @@
             <h2 class="card-title">📥 Receipt Logs</h2>
             <div class="table-container">
               <table>
-                <thead><tr><th>Date</th><th>Supplier</th><th>Item</th><th>Qty.</th><th>Reference</th><th>Amount</th></tr></thead>
+                <thead><tr><th>Date</th><th>Supplier</th><th>Item</th><th>Qty.</th><th>Reference</th><th>Amount</th><th>Action</th></tr></thead>
                 <tbody id="receive-logs-body"></tbody>
               </table>
             </div>
@@ -365,6 +370,22 @@
 
     </main>
 
+    <!-- Modal for Editing Logs -->
+    <div id="edit-log-modal" class="modal-overlay">
+      <div class="modal-card">
+        <h3 class="card-title" id="edit-modal-title">Modify Log Entry</h3>
+        <form id="edit-log-form">
+          <input type="hidden" id="edit-log-id">
+          <input type="hidden" id="edit-log-type">
+          <div id="edit-form-fields" class="form-grid" style="margin-bottom:20px;"></div>
+          <div class="button-row">
+            <button type="button" class="btn btn-secondary" id="close-edit-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div id="print-section" aria-hidden="true"><div id="triplicate-container"></div></div>
   </div>
 
@@ -381,7 +402,6 @@
     };
 
     const APP_ROOT = "apt_v2/bhadrak";
-    const LEGACY_ROOT = "apt_legacy";
     const REQUIRED_EMPLOYEE_ID = "Operator";
 
     let db = null;
@@ -393,7 +413,7 @@
     let isConnected = false;
     let user = null;
     let state = emptyState();
-    let mastersUnlocked = true; // Auto-unlocked
+    let mastersUnlocked = true;
     let reconnectTimer = null;
     let serverTime = null;
 
@@ -458,41 +478,6 @@
       return true;
     }
 
-    async function ensureLiveConnection() {
-      if (!dataRef) dataRef = db.ref(APP_ROOT);
-      if (!connectionRef || !connectionListener) startConnectionListener();
-      try { db.goOnline(); } catch (ignore) {}
-
-      if (!isConnected) {
-        await new Promise(function(resolve,reject) {
-          let settled = false;
-          const tempRef = db.ref(".info/connected");
-          const finish = function(ok,error) {
-            if (settled) return;
-            settled = true;
-            tempRef.off("value",tempListener);
-            if (ok) {
-              isConnected = true;
-              setStatus("Live — all systems are receiving changes","ok");
-              resolve();
-            } else {
-              reject(error || new Error("The shared database is not connected."));
-            }
-          };
-          const tempListener = function(snapshot) {
-            finish(snapshot.val() === true, new Error("The shared database is offline or still connecting. Please try again when status shows Live."));
-          };
-          tempRef.on("value",tempListener,function(error) {
-            finish(false,new Error("Firebase connection check failed: " + friendlyError(error)));
-          });
-          setTimeout(function() {
-            finish(false,new Error("The shared database is offline. Try again after status shows Live."));
-          },15000);
-        });
-      }
-      return true;
-    }
-
     function startConnectionListener() {
       if (connectionRef && connectionListener) connectionRef.off("value",connectionListener);
       try { db.goOnline(); } catch (ignore) {}
@@ -530,13 +515,9 @@
           renderAll();
           if (isConnected) setStatus("Live — all systems are receiving changes","ok");
         };
-        dataRef.on(
-          "value",
-          dataListener,
-          function(error) {
-            setStatus("Cloud access failed: " + friendlyError(error),"bad");
-          }
-        );
+        dataRef.on("value",dataListener,function(error) {
+          setStatus("Cloud access failed: " + friendlyError(error),"bad");
+        });
       } catch (error) {
         setStatus("Cloud setup failed: " + friendlyError(error),"bad");
       }
@@ -627,18 +608,20 @@
       const receiptLogs = records.filter(function(record) { return record && record.type === "RECEIPT"; });
       const issueBody = document.getElementById("issue-logs-body");
       const receiptBody = document.getElementById("receive-logs-body");
+      
       issueBody.innerHTML = issueLogs.length ? issueLogs.map(function(record) {
         const details = asObject(record.details);
         const lines = (Array.isArray(record.lines) ? record.lines : []).map(function(line) {
           return escapeHtml(line.itemName || itemName(line.itemId)) + (line.serialNumber ? ' <small>[SN: ' + escapeHtml(line.serialNumber) + ']</small>' : '') + ' <strong>(x' + Math.abs(numeric(line.change)) + ')</strong>';
         }).join("<br>");
-        return '<tr><td>' + escapeHtml(record.transactionDate || formatWhen(record.createdAt)) + '</td><td><strong>' + escapeHtml(record.reference) + '</strong></td><td>' + escapeHtml(details.suppliedTo || "") + '<br><small>' + escapeHtml(details.office || "") + '</small></td><td>' + (lines || "—") + '</td><td><button class="btn btn-secondary btn-small" type="button" data-reprint-record="' + escapeHtml(record.id) + '">Re-print</button></td></tr>';
+        return '<tr><td>' + escapeHtml(record.transactionDate || formatWhen(record.createdAt)) + '</td><td><strong>' + escapeHtml(record.reference) + '</strong></td><td>' + escapeHtml(details.suppliedTo || "") + '<br><small>' + escapeHtml(details.office || "") + '</small></td><td>' + (lines || "—") + '</td><td><div class="button-row"><button class="btn btn-secondary btn-small" type="button" data-reprint-record="' + escapeHtml(record.id) + '">Re-print</button><button class="btn btn-secondary btn-small" type="button" data-edit-issue="' + escapeHtml(record.id) + '">Modify</button></div></td></tr>';
       }).join("") : '<tr><td colspan="5" class="empty-cell">No issue records yet.</td></tr>';
+
       receiptBody.innerHTML = receiptLogs.length ? receiptLogs.map(function(record) {
         const details = asObject(record.details);
         const line = Array.isArray(record.lines) && record.lines[0] ? record.lines[0] : {};
-        return '<tr><td>' + escapeHtml(record.transactionDate || formatWhen(record.createdAt)) + '</td><td>' + escapeHtml(details.supplier || "") + '</td><td>' + escapeHtml(line.itemName || itemName(line.itemId)) + '</td><td><strong>' + Math.abs(numeric(line.change)) + '</strong></td><td>' + escapeHtml(details.order || record.reference || "") + (details.invoice ? '<br><small>' + escapeHtml(details.invoice) + '</small>' : '') + '</td><td>' + formatMoney(details.amount) + '</td></tr>';
-      }).join("") : '<tr><td colspan="6" class="empty-cell">No receipt records yet.</td></tr>';
+        return '<tr><td>' + escapeHtml(record.transactionDate || formatWhen(record.createdAt)) + '</td><td>' + escapeHtml(details.supplier || "") + '</td><td>' + escapeHtml(line.itemName || itemName(line.itemId)) + '</td><td><strong>' + Math.abs(numeric(line.change)) + '</strong></td><td>' + escapeHtml(details.order || record.reference || "") + (details.invoice ? '<br><small>' + escapeHtml(details.invoice) + '</small>' : '') + '</td><td>' + formatMoney(details.amount) + '</td><td><button class="btn btn-secondary btn-small" type="button" data-edit-receipt="' + escapeHtml(record.id) + '">Modify</button></td></tr>';
+      }).join("") : '<tr><td colspan="7" class="empty-cell">No receipt records yet.</td></tr>';
     }
     function renderMasterList(group,listId) {
       const list = document.getElementById(listId);
@@ -833,10 +816,6 @@
           const suppliedTo = next.masters.suppliedTo[suppliedToId];
           const invoice = next.masters.invoices[invoiceId];
           if (!office || office.active === false || !suppliedTo || suppliedTo.active === false || !invoice || invoice.active === false) { failure = "One of the selected master entries was retired by another system."; return false; }
-          const duplicateInvoice = Object.values(next.transactions).some(function(record) {
-            return record && record.type === "ISSUE" && String(record.reference) === String(invoice.name);
-          });
-          if (duplicateInvoice) { failure = 'The invoice number "' + invoice.name + '" has already been used.'; return false; }
           const finalLines = [];
           for (let i = 0; i < entered.lines.length; i++) {
             const row = entered.lines[i];
@@ -859,6 +838,118 @@
         if (printableRecord) printTriplicateInvoice(printableRecord);
       } catch (error) { alert("Could not save the issue: " + friendlyError(error)); }
     }
+
+    // Modification handlers for Issue and Receipt Logs
+    function openEditIssueModal(recordId) {
+      const record = state.transactions[recordId];
+      if (!record) return;
+      document.getElementById("edit-log-id").value = recordId;
+      document.getElementById("edit-log-type").value = "ISSUE";
+      document.getElementById("edit-modal-title").textContent = "Modify Issue Log Entry";
+      
+      const fieldsContainer = document.getElementById("edit-form-fields");
+      const details = asObject(record.details);
+      
+      // Build dynamic article inputs for each entry under Articles
+      let articleInputsHtml = '';
+      if (record.lines && record.lines.length > 0) {
+        record.lines.forEach((line, idx) => {
+          articleInputsHtml += `
+            <div class="form-group span-all">
+              <label>Article #${idx + 1} Description</label>
+              <input class="edit-article-name" data-line-index="${idx}" value="${escapeHtml(line.itemName || "")}" required>
+            </div>
+          `;
+        });
+      } else {
+        articleInputsHtml = '<div class="form-group span-all"><label>Articles</label><input class="edit-article-name" data-line-index="0" value="" required></div>';
+      }
+
+      fieldsContainer.innerHTML = `
+        <div class="form-group"><label>Invoice No.</label><input id="edit-invoice-no" value="${escapeHtml(record.reference)}" required></div>
+        <div class="form-group"><label>Issued To (Designation)</label><input id="edit-supplied-to" value="${escapeHtml(details.suppliedTo || "")}" required></div>
+        ${articleInputsHtml}
+      `;
+      document.getElementById("edit-log-modal").classList.add("active");
+    }
+
+    function openEditReceiptModal(recordId) {
+      const record = state.transactions[recordId];
+      if (!record) return;
+      document.getElementById("edit-log-id").value = recordId;
+      document.getElementById("edit-log-type").value = "RECEIPT";
+      document.getElementById("edit-modal-title").textContent = "Modify Receipt Log Entry";
+      
+      const fieldsContainer = document.getElementById("edit-form-fields");
+      const details = asObject(record.details);
+      const line = record.lines && record.lines[0] ? record.lines[0] : {};
+
+      fieldsContainer.innerHTML = `
+        <div class="form-group"><label>Date</label><input id="edit-rec-date" type="date" value="${escapeHtml(record.transactionDate || "")}" required></div>
+        <div class="form-group"><label>Supplier</label><input id="edit-supplier" value="${escapeHtml(details.supplier || "")}" required></div>
+        <div class="form-group"><label>Item</label><input id="edit-item-name" value="${escapeHtml(line.itemName || "")}" required></div>
+        <div class="form-group"><label>Qty.</label><input id="edit-qty" type="number" min="1" value="${Math.abs(numeric(line.change))}" required></div>
+        <div class="form-group"><label>Reference</label><input id="edit-reference" value="${escapeHtml(record.reference || "")}" required></div>
+        <div class="form-group"><label>Amount (₹)</label><input id="edit-amount" type="number" step="0.01" value="${numeric(details.amount)}" required></div>
+      `;
+      document.getElementById("edit-log-modal").classList.add("active");
+    }
+
+    async function handleEditLogSubmit(event) {
+      event.preventDefault();
+      if (!requireLiveConnection()) return;
+      const recordId = document.getElementById("edit-log-id").value;
+      const type = document.getElementById("edit-log-type").value;
+
+      try {
+        const result = await commitChange(function(next) {
+          const record = next.transactions[recordId];
+          if (!record) return false;
+
+          if (type === "ISSUE") {
+            record.reference = document.getElementById("edit-invoice-no").value.trim();
+            if (!record.details) record.details = {};
+            record.details.suppliedTo = document.getElementById("edit-supplied-to").value.trim();
+            
+            // Update each entry under Articles
+            const articleInputs = document.querySelectorAll(".edit-article-name");
+            articleInputs.forEach(input => {
+              const idx = parseInt(input.dataset.lineIndex, 10);
+              const val = input.value.trim();
+              if (record.lines && record.lines[idx]) {
+                record.lines[idx].itemName = val;
+              }
+            });
+
+            writeAudit(next, "ISSUE_MODIFIED", "Modified Issue Log: " + record.reference, { transactionId: recordId });
+          } else if (type === "RECEIPT") {
+            record.transactionDate = document.getElementById("edit-rec-date").value;
+            record.reference = document.getElementById("edit-reference").value.trim();
+            if (!record.details) record.details = {};
+            record.details.supplier = document.getElementById("edit-supplier").value.trim();
+            record.details.amount = numeric(document.getElementById("edit-amount").value);
+            const itemNameVal = document.getElementById("edit-item-name").value.trim();
+            const newQty = numeric(document.getElementById("edit-qty").value);
+            if (record.lines && record.lines[0]) {
+              record.lines[0].itemName = itemNameVal;
+              record.lines[0].change = newQty;
+            }
+            writeAudit(next, "RECEIPT_MODIFIED", "Modified Receipt Log: " + record.reference, { transactionId: recordId });
+          }
+          return true;
+        });
+
+        if (result.committed) {
+          document.getElementById("edit-log-modal").classList.remove("active");
+          alert("Log entry modified successfully.");
+        } else {
+          alert("Modification failed.");
+        }
+      } catch (error) {
+        alert("Could not update the log entry: " + friendlyError(error));
+      }
+    }
+
     async function resetAllStock() {
       if (!mastersUnlocked || !requireLiveConnection()) return;
       const confirmCode = Math.floor(1000 + Math.random() * 9000);
@@ -964,7 +1055,12 @@
         let tableRows = "";
         let pageCount = 0;
         (record.lines || []).forEach(function(line,index) {
-          tableRows += '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(line.itemName) + (line.serialNumber ? ' <small>[SN: ' + escapeHtml(line.serialNumber) + ']</small>' : '') + '</td><td>' + Math.abs(numeric(line.change)) + '</td><td></td></tr>';
+          // MODIFIED HERE: Serial number is ONLY printed against the particular issued article if it exists.
+          let descriptionHtml = escapeHtml(line.itemName);
+          if (line.serialNumber && line.serialNumber.trim() !== "") {
+            descriptionHtml += ' <small>[Serial No: ' + escapeHtml(line.serialNumber) + ']</small>';
+          }
+          tableRows += '<tr><td>' + (index + 1) + '</td><td>' + descriptionHtml + '</td><td>' + Math.abs(numeric(line.change)) + '</td><td></td></tr>';
           pageCount++;
         });
         while (pageCount < 4) {
@@ -1002,13 +1098,29 @@
       });
       document.getElementById("bulk-master-upload").addEventListener("click",function() { handleBulkMasterUpload(document.getElementById("bulk-master-type").value,"bulk-master-file"); });
       document.getElementById("bulk-opening-upload").addEventListener("click",handleBulkOpeningUpload);
+      
+      // Edit log modal submission
+      document.getElementById("edit-log-form").addEventListener("submit", handleEditLogSubmit);
+      document.getElementById("close-edit-modal").addEventListener("click", function() {
+        document.getElementById("edit-log-modal").classList.remove("active");
+      });
+
       document.body.addEventListener("click",function(event) {
         const retireBtn = event.target.closest("[data-retire-master]");
         const reprintBtn = event.target.closest("[data-reprint-record]");
+        const editIssueBtn = event.target.closest("[data-edit-issue]");
+        const editReceiptBtn = event.target.closest("[data-edit-receipt]");
+
         if (retireBtn) retireMaster(retireBtn.dataset.retireMaster,retireBtn.dataset.masterId);
         else if (reprintBtn) {
           const record = state.transactions[reprintBtn.dataset.reprintRecord];
           if (record) printTriplicateInvoice(record);
+        }
+        else if (editIssueBtn) {
+          openEditIssueModal(editIssueBtn.dataset.editIssue);
+        }
+        else if (editReceiptBtn) {
+          openEditReceiptModal(editReceiptBtn.dataset.editReceipt);
         }
       });
     }
